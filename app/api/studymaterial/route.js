@@ -12,48 +12,55 @@ export async function GET() {
 
     if (allEntries.length == 0) {
       await Batch1.create({
-        batchName: "Vinayaka Batch 01 Nimcet 2024",
-        batchCreatedAt: "20/04/24",
-        batchCode: "batchCode",
-        subjects:
-          "Mathematics, Computer, Quantitative Aptitude, Logical Reasoning, English, Other",
+        batchName: "Mastering React In 1 Months",
+        batchCreatedAt: "10/12/24",
+        batchCode: "#cqhef",
+        subjects: "Programming Fundamentals, Java Script, React JS, Express JS",
         studyMaterial: [
           {
-            title: "Two Digit Number Multiplication",
-            mentor: "Ashish Kumar Singh",
-            resourceUrl: "/abc.pdf",
+            title: "50+ ReactJS Interview Questions",
+            mentor: "Kunal Rajput",
+            resourceUrl: "/SM-pdf1.pdf",
             resourceType: "pdf",
           },
           {
-            title: "Syllogism Basic 500 Questions",
-            mentor: "Ashish Kumar Singh",
-            resourceUrl: "/abc.pdf",
+            title: "React interview questions",
+            mentor: "Kunal Rajput",
+            resourceUrl: "/SM-pdf2.pdf",
+            resourceType: "pdf",
+          },
+          {
+            title: "Top 70 ReactJS Interview Questions and Answers",
+            mentor: "Kunal Rajput",
+            resourceUrl: "/SM-pdf3.pdf",
             resourceType: "pdf",
           },
         ],
         announcements: [
           {
-            title: "Tests Tommorow",
-            mentor: "Ashish Kumar Singh",
-            message: "their is test tommorow",
+            title: "Mock Test Updates Now Live!",
+            mentor: "Pooja Kanetkar",
+            message:
+              "Our mock tests just got better! New exam simulations, improved feedback, and detailed performance analysis are now live. Test your skills and enhance your preparation today.",
           },
           {
-            title: "Tests Tommorow",
-            mentor: "Ashish Kumar Singh",
-            message: "their is test on 12th Feb",
+            title: "SkillCrafters Launching Mobile App!",
+            mentor: "Pooja Kanetkar",
+            message:
+              "Great news! SkillCrafters is now available on mobile. Download our app to study on the go, access mock tests, and track your progress anytime, anywhere.",
           },
         ],
         assignments: [
           {
-            title: "Two Digit Number Multiplication",
-            mentor: "Ashish Kumar Singh",
-            resourceUrl: "/abc.pdf",
+            title: "Simple JavaScript Assignments",
+            mentor: "Roma Singh",
+            resourceUrl: "/A-pdf1.pdf",
             resourceType: "pdf",
           },
           {
-            title: "Syllogism Basic 500 Questions",
-            mentor: "Ashish Kumar Singh",
-            resourceUrl: "/abc.pdf",
+            title: "JavaScript Parctice PDF",
+            mentor: "Roma Singh",
+            resourceUrl: "/A-pdf2.pdf",
             resourceType: "pdf",
           },
         ],
