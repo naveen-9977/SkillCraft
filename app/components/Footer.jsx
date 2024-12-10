@@ -7,20 +7,24 @@ export default function Footer() {
       href: "/",
     },
     {
-      name: "Departments",
-      href: "/",
+      name: "Blogs",
+      href: "/blogs",
     },
     {
-      name: "Facilities",
-      href: "/",
+      name: "Courses",
+      href: "/courses",
     },
     {
-      name: "About Us",
-      href: "/",
+      name: "Services",
+      href: "/services",
     },
     {
-      name: "Contact Us",
-      href: "/",
+      name: "About",
+      href: "/about",
+    },
+    {
+      name: "Contact",
+      href: "/contact",
     },
   ];
 
@@ -46,8 +50,8 @@ export default function Footer() {
           <div className="">
             <h2>Logo Here</h2>
             <p className="  py-2">
-              Smc Hospital is a dedicated hospital in Demar, Dhamtari, that
-              offers high-quality healthcare services to patients of all ages.
+              SkillCrafters is an innovative online coaching platform designed
+              to help students excel in competitive exams.
             </p>
           </div>
           <div className="">
@@ -82,7 +86,7 @@ export default function Footer() {
       </section>
       <footer className=" pb-5  ">
         <div className="container m-auto px-4 text-center text-paragraph/80">
-          &copy; Copyrights 2024 smchospitaldhamtari.in. All rights reserved.
+          &copy; Copyrights 2024 skillcrafters.in. All rights reserved.
         </div>
       </footer>
     </>

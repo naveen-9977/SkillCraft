@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import React, { useEffect, useState } from "react";
 
 export default function studyMaterials() {
@@ -151,7 +152,7 @@ export default function studyMaterials() {
       </div>
       {AllInfos ? (
         AllInfos[0].studyMaterial.map((item, index) => (
-          <div className=" mt-2 py-4 bg-white px-4 border-[1px] border-zinc-200 rounded flex items-center gap-8" key={index}>
+          <Link href={item.resourceUrl} target="_blank" className=" mt-2 py-4 bg-white px-4 border-[1px] border-zinc-200 rounded flex items-center gap-8" key={index}>
             <div className="hidden md:flex items-center">
               <img src="/pdf-ico.svg" alt="" className="size-12" />
             </div>
@@ -161,7 +162,7 @@ export default function studyMaterials() {
               </h4>
               <p className="text-zinc-500 text-sm mt-1">{item.mentor}</p>
             </div>
-          </div>
+          </Link>
         ))
       ) : (
         <div></div>

@@ -3,10 +3,10 @@ import React from "react";
 export default function Blogs() {
   let blogs = [
     {
-      tittle: "Boost your conversion rate",
+      tittle: "Boost Your Exam Scores",
       description:
-        "Illo sint voluptas. Error voluptates culpa eligendi. Hic vel totam vitae illo. Non aliquid explicabo necessitatibus unde. Sed exercitationem placeat consectetur nulla deserunt vel. Iusto corrupti dicta.",
-      imgUrl: "https://hyprland.org/imgs/ricing_competitions/1/amadeus.webp",
+        "IBoost Your Exam Scores with SkillCrafters! Our expert resources, personalized learning paths, and interactive mock tests are designed to maximize your performance and build your confidence.",
+      imgUrl: "/blog1.png",
       authorName: "Prateek Yadu",
       position: "CEO & Founder",
     },
@@ -28,7 +28,7 @@ export default function Blogs() {
         <div className="flex flex-col gap-3 md:flex-row " key={index}>
           <div className="md:w-1/3 xl:w-[25%] md:pr-5">
             <img
-              src="https://hyprland.org/imgs/ricing_competitions/1/amadeus.webp"
+              src="/blog1.png"
               alt=""
               className="h-[205px] w-full object-cover rounded-lg"
             />

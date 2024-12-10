@@ -3,7 +3,9 @@ import React from "react";
 export default function WhyUs() {
   return (
     <section className="px-4 py-9 container m-auto">
-      <h3 className="text-xl font-semibold text-center py-10 mt-4 md:text-3xl">Why choose Skill Crafters</h3>
+      <h3 className="text-xl font-semibold text-center py-10 mt-4 md:text-3xl">
+        Why choose Skill Crafters
+      </h3>
       <div className="lg:flex">
         <div className="hidden lg:flex justify-center items-center lg:w-1/2 xl:w-[40%] lg:px-6 xl:px-14 h-fit">
           <img
@@ -38,11 +40,11 @@ export default function WhyUs() {
             </div>
             <div className="right">
               <h3 className="text-lg lg:text-xl font-bold mb-2 text-center md:text-start md:mb-0">
-                Expertise and experience
+                Tailored for Competitive Success
               </h3>
               <p className="text-center lg:text-start">
-                With years of experience in industry, our team delivers
-                innovative solutions tailored to your needs.
+                We focus on providing personalized guidance and resources to
+                help every student excel in competitive exams.
               </p>
             </div>
           </div>
@@ -65,11 +67,12 @@ export default function WhyUs() {
             </div>
             <div className="right">
               <h3 className="text-lg lg:text-xl font-bold mb-2 text-center md:text-start md:mb-0">
-                Quality and reliability
+                Expert-Led Learning
               </h3>
               <p className="text-center lg:text-start">
-                We deliver the highest quality products and services with
-                unmatched reliability.
+                Our team of experienced educators and mentors ensures
+                high-quality content and support, guiding you every step of the
+                way.
               </p>
             </div>
           </div>
@@ -92,11 +95,12 @@ export default function WhyUs() {
             </div>
             <div className="right">
               <h3 className="text-lg lg:text-xl font-bold mb-2 text-center md:text-start md:mb-0">
-                Innovative solutions
+                Comprehensive Resources
               </h3>
               <p className="text-center lg:text-start">
-                We deliver creative and effective solutions to drive your
-                business forward.
+                From mock tests to study materials, we offer everything you need
+                in one place. Our resources are curated to simplify your
+                preparation journey.
               </p>
             </div>
           </div>

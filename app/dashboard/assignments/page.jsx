@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import React, { useEffect, useState } from "react";
 
 export default function AssignmentsPage() {
@@ -21,9 +22,10 @@ export default function AssignmentsPage() {
         <h1 className="text-xl mb-2">Assignments</h1>
         {AllInfos ? (
           AllInfos[0].assignments?.map((item, index) => (
-            <div
+            <Link href={item.resourceUrl}
               className=" mt-2 py-4 bg-white px-4 border-[1px] border-zinc-200 rounded flex items-center gap-8"
               key={index}
+              target="_blank"
             >
               <div className="hidden md:flex items-center">
                 <img src="/pdf-ico.svg" alt="" className="size-12" />
@@ -32,7 +34,7 @@ export default function AssignmentsPage() {
                 <h4 className="text-base font-medium">{item.title}</h4>
                 <p className="text-zinc-500 text-sm mt-1">{item.mentor}</p>
               </div>
-            </div>
+            </Link>
           ))
         ) : (
           <div className=" mt-5 py-4 bg-white px-4 border-[1px] border-zinc-200 rounded h-[80vh] flex items-center justify-center">

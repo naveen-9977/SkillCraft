@@ -27,7 +27,7 @@ export default function RootLayout({ children }) {
         {!pathname.startsWith("/dashboard") && !pathname.startsWith("/admin") && <Navbar/> }
         {/* <Navbar/> */}
         <div className="">{children}</div>
-        <Footer />
+        {!pathname.startsWith("/dashboard") && !pathname.startsWith("/admin") && <Footer/> }
       </body>
     </html>
   );

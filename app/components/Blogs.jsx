@@ -9,33 +9,33 @@ export default function BlogsCmp() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         <div className="flex flex-col">
           <img
-            src="/laparoscopic.png"
+            src="/blog1.png"
             alt=""
             className="h-[253px] lg:h-[300px] w-full object-cover rounded"
           />
-          <h4 className="mt-2 text-lg">General & Laparoscopic Surgery</h4>
+          <h4 className="mt-2 text-lg">Boost Your Exam Scores</h4>
           <a href="/" className="text-primary text-sm">
             Read more
           </a>
         </div>
         <div className="flex flex-col">
           <img
-            src="/gynaecology.png"
+            src="/blog2.jpg"
             alt=""
             className="h-[253px] lg:h-[300px] w-full object-cover rounded"
           />
-          <h4 className="mt-2 text-lg">Obs & Gynaecology</h4>
+          <h4 className="mt-2 text-lg">Why Personalized Plans Matter</h4>
           <a href="/" className="text-primary text-sm">
             Read more
           </a>
         </div>
         <div className="flex flex-col">
           <img
-            src="/anaesthesiology.png"
+            src="/blog3.jpg"
             alt=""
             className="h-[253px] lg:h-[300px] w-full object-cover rounded"
           />
-          <h4 className="mt-2 text-lg">Anaesthesiology</h4>
+          <h4 className="mt-2 text-lg">The Power of Mock Tests</h4>
           <a href="/" className="text-primary text-sm">
             Read more
           </a>

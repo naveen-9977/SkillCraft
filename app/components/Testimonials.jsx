@@ -60,11 +60,10 @@ export default function Testimonials() {
               </svg>
             </div>
             <p className="mb-6">
-              I had a wonderful experience at SMC Hospital. The doctors and
-              nurses were extremely professional and caring throughout my
-              treatment. The facilities were clean and well-maintained, and the
-              staff ensured I was comfortable during my stay. Highly recommend
-              this hospital for any medical needs!
+              SkillCrafters helped me streamline my exam preparation. The
+              personalized study plans were exactly what I needed. The expert
+              resources and mock tests boosted my confidence and performance.
+              I'm now fully prepared for my competitive exams!
             </p>
             <div className="flex items-center gap-3">
               <img
@@ -72,7 +71,7 @@ export default function Testimonials() {
                 alt=""
                 className="rounded-full w-10"
               />
-              <h5 className="font-medium">Ramesh Kumar </h5>
+              <h5 className="font-medium">Arjun Patel</h5>
             </div>
           </div>
           <div className="bg-white ring-1 ring-[#E7E7E7] p-5 rounded">
@@ -126,11 +125,10 @@ export default function Testimonials() {
               </svg>
             </div>
             <p className="mb-6">
-              My son was treated at SMC Hospital for a minor surgery, and I
-              couldn’t be happier with the care he received. The pediatric team
-              was incredibly patient and explained every step of the process. It
-              was reassuring to know my child was in safe hands. Thank you to
-              the entire team!
+              I’ve never come across a platform that offers such tailored
+              guidance. The study materials and detailed feedback from
+              SkillCrafters helped me improve my weak areas. I’m confident I’ll
+              do well in my exams!
             </p>
             <div className="flex items-center gap-3">
               <img
@@ -138,7 +136,7 @@ export default function Testimonials() {
                 alt=""
                 className="rounded-full w-10"
               />
-              <h5 className="font-medium">Sunita Sharma</h5>
+              <h5 className="font-medium">Priya Sharma</h5>
             </div>
           </div>
           <div className="bg-white ring-1 ring-[#E7E7E7] p-5 rounded">
@@ -192,11 +190,10 @@ export default function Testimonials() {
               </svg>
             </div>
             <p className="mb-6">
-              I was admitted to the ICU at SMC Hospital for a severe health
-              issue. The level of care and attention I received was exceptional.
-              The doctors were highly skilled, and the nurses were always
-              attentive and kind. I’m grateful for the treatment that saved my
-              life.
+              The interactive mock tests and progress tracking on SkillCrafters
+              are excellent. It helped me identify areas to focus on and made my
+              preparation much more efficient. SkillCrafters truly made a
+              difference in my exam strategy.
             </p>
             <div className="flex items-center gap-3">
               <img
@@ -204,7 +201,7 @@ export default function Testimonials() {
                 alt=""
                 className="rounded-full w-10"
               />
-              <h5 className="font-medium">Arjun Patel </h5>
+              <h5 className="font-medium">Rahul Verma</h5>
             </div>
           </div>
           <div className="bg-white ring-1 ring-[#E7E7E7] p-5 rounded">
@@ -258,11 +255,10 @@ export default function Testimonials() {
               </svg>
             </div>
             <p className="mb-6">
-              The General Ward at SMC Hospital was clean and well-equipped. The
-              nursing staff was very polite and checked on me regularly. There
-              was a small delay in discharge paperwork, but overall, the service
-              was excellent. I would definitely recommend this hospital to
-              others.
+              SkillCrafters provided me with everything I needed for my exam
+              preparation. The resources are well-organized, and the
+              personalized learning approach made all the difference. I feel
+              more confident and ready to face my exams!
             </p>
             <div className="flex items-center gap-3">
               <img
@@ -270,7 +266,7 @@ export default function Testimonials() {
                 alt=""
                 className="rounded-full w-10"
               />
-              <h5 className="font-medium">Meera Joshi</h5>
+              <h5 className="font-medium">Ananya Gupta</h5>
             </div>
           </div>
         </div>

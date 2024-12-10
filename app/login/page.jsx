@@ -27,7 +27,7 @@ export default function LoginPage() {
     if (res.status === 200 && data.isAdmin === true) {
       console.log(data)
       setTimeout(() => {
-        router.push("/admin");
+        router.push("/dashboard");
       }, 2000);
     } else {
       // will throw error

@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import { useState } from "react";
 
@@ -30,7 +30,10 @@ export default function SignupPage() {
     const data = await res.json();
 
     if (res.status === 200) {
-
+      console.log(data);
+      setTimeout(() => {
+        router.push("/dashboard");
+      }, 2000);
     } else {
       // will throw error
     }
@@ -84,7 +87,10 @@ export default function SignupPage() {
             onChange={getConfirmPassword}
           />
         </div>
-        <button className="bg-primary text-white py-2 rounded mb-9" onClick={sendRequest}>
+        <button
+          className="bg-primary text-white py-2 rounded mb-9"
+          onClick={sendRequest}
+        >
           Sign up
         </button>
       </div>
