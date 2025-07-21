@@ -1,61 +1,106 @@
-import React from "react";
+"use client";
+
+import React, { useEffect, useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
 
 export default function Blogs() {
-  let blogs = [
-    {
-      tittle: "Boost Your Exam Scores",
-      description:
-        "IBoost Your Exam Scores with SkillCrafters! Our expert resources, personalized learning paths, and interactive mock tests are designed to maximize your performance and build your confidence.",
-      imgUrl: "/blog1.png",
-      authorName: "Prateek Yadu",
-      position: "CEO & Founder",
-    },
-    // {
-    //   tittle: "Boost your conversion rate",
-    //   description:
-    //     "Illo sint voluptas. Error voluptates culpa eligendi. Hic vel totam vitae illo. Non aliquid explicabo necessitatibus unde. Sed exercitationem placeat consectetur nulla deserunt vel. Iusto corrupti dicta.",
-    //   imgUrl: "https://hyprland.org/imgs/ricing_competitions/1/flicko.webp",
-    //   authorName: "Prateek Yadu",
-    //   position: "CEO & Founder",
-    // },
-  ];
+  const [blogs, setBlogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetchBlogs();
+  }, []);
+
+  const fetchBlogs = async () => {
+    try {
+      const res = await fetch('/api/admin/blog');
+      const data = await res.json();
+      if (res.ok) {
+        setBlogs(data.blogs);
+      } else {
+        setError('Failed to fetch blogs');
+      }
+    } catch (error) {
+      setError('Error loading blogs');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-red-600">
+        {error}
+      </div>
+    );
+  }
+
   return (
-    <section className="px-4 container m-auto">
-      <h3 className="text-center font-bold text-xl lg:text-2xl my-6 md:my-10">
-        Blogs
-      </h3>
-      {blogs.map((blog, index) => (
-        <div className="flex flex-col gap-3 md:flex-row " key={index}>
-          <div className="md:w-1/3 xl:w-[25%] md:pr-5">
-            <img
-              src="/blog1.png"
-              alt=""
-              className="h-[205px] w-full object-cover rounded-lg"
-            />
-          </div>
-          <div className="md:w-2/3 xl:w-[75%] flex  flex-col">
-            <h4 className="text-[#393636] font-semibold text-lg mb-2 lg:text-xl">
-              {blog.tittle}
-            </h4>
-            <p className="text-[#676060]">{blog.description}</p>
-            <div className="flex items-center gap-3 align-baseline md:mt-7">
-              <div className="">
-                <img
-                  src="https://img.freepik.com/free-photo/indoor-picture-cheerful-handsome-young-man-having-folded-hands-looking-directly-smiling-sincerely-wearing-casual-clothes_176532-10257.jpg?t=st=1731748405~exp=1731752005~hmac=d8372473d961e2b331b26a2eaa4985ef93d4dc07493324923e87bafd6338a29e&w=1380"
-                  alt=""
-                  className="w-10 h-10 rounded-full object-cover"
-                />
-              </div>
-              <div className="">
-                <h5 className="text-[#393636] text-sm font-semibold">
-                  {blog.authorName}
-                </h5>
-                <p className="text-xs text-[#676060]">{blog.position}</p>
-              </div>
-            </div>
-          </div>
+    <section className="px-4 container mx-auto py-8">
+      <h1 className="text-3xl font-bold text-center mb-12">Latest Blog Posts</h1>
+      
+      {blogs.length === 0 ? (
+        <div className="text-center text-gray-500 py-12">
+          No blog posts available yet.
         </div>
-      ))}
+      ) : (
+        <div className="grid gap-8">
+          {blogs.map((blog) => (
+            <article 
+              key={blog._id} 
+              className="bg-white rounded-lg shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+            >
+              <Link href={`/blogs/${blog._id}`} className="flex flex-col md:flex-row">
+                <div className="md:w-1/3 relative h-64 md:h-auto">
+                  <Image
+                    src={blog.coverImage}
+                    alt={blog.title}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                
+                <div className="flex-1 p-6">
+                  <div className="mb-4">
+                    <h2 className="text-2xl font-semibold text-gray-900 mb-2">
+                      {blog.title}
+                    </h2>
+                    <p className="text-gray-600">
+                      {blog.description}
+                    </p>
+                  </div>
+                  
+                  <div className="mt-4">
+                    <div className="flex items-center text-sm text-gray-500">
+                      <span className="mr-3">
+                        {new Date(blog.createdAt).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </span>
+                      {/* <span>·</span>
+                      <span className="ml-3">
+                        {Math.ceil((blog.paragraphOne.length + blog.paragraphTwo.length + blog.paragraphThree.length) / 1000)} min read
+                      </span> */}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

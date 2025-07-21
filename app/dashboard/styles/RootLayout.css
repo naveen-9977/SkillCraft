@@ -1,0 +1,356 @@
+/* app/styles/RootLayout.css */
+:root {
+  /* --- Warm Light Color Variables (Updated to match Admin Theme) --- */
+  --sidebar-bg: #FFF5E0; /* Creamy off-white for header and sidebar */
+  --sidebar-text: #4A4A4A; /* Soft dark gray text on light backgrounds */
+  --sidebar-hover: #F0E0D0; /* Slightly darker cream for hover */
+  --sidebar-active: #007AFF; /* Vibrant blue for active states (from admin theme) */
+  --sidebar-active-bg: rgba(0, 122, 255, 0.1); /* Very light transparent blue for active background (from admin theme) */
+  --primary: #007AFF; /* Explicitly set primary color to match active */
+  
+  --main-content-bg: #FFFFFF; /* Pure white for main content area */
+  --text-primary: #333333; /* Darker text for main content */
+  --text-secondary: #777777; /* Secondary text color */
+  --border-color: #E0E0E0; /* Very light gray for separators */
+  --header-bottom-border-color: #ADD8E6; /* Light blue color for header bottom border */
+
+  /* Existing layout variables */
+  --sidebar-width-open: 260px;
+  --sidebar-width-closed: 70px;
+  --sidebar-transition: 0.3s ease;
+  --sidebar-radius: 12px;
+  --sidebar-shadow: 0 5px 15px rgba(0, 0, 0, 0.08); /* Lighter shadow for light theme */
+  --header-height: 60px; 
+}
+
+/* Layout Wrapper */
+.layout-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--main-content-bg);
+  color: var(--text-primary);
+}
+
+/* Fixed top header */
+.layout-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 1001;
+  height: var(--header-height);
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  box-shadow: var(--sidebar-shadow);
+  /* Add the light blue border here */
+  border-bottom: 3px solid var(--header-bottom-border-color); /* Adjust thickness as needed */
+}
+
+/* Elements inside header */
+.layout-logo-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  color: inherit;
+}
+
+.layout-logo-img {
+  object-fit: contain;
+}
+
+.layout-app-title {
+  font-size: 24px;
+  font-weight: bolder;
+  white-space: nowrap;
+  color: black;
+}
+
+.layout-user-info {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  gap: 15px;
+}
+
+.layout-user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: var(--sidebar-active);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 14px;
+  color: white;
+  text-decoration: none;
+}
+
+.layout-user-name-link {
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+/* Main Content Area */
+.layout-main-content {
+  flex-grow: 1;
+  padding: 20px;
+  /* Adjust padding-top to account for the border thickness */
+  padding-top: calc(var(--header-height) + 20px + 3px); /* Added 3px for the border */
+  overflow-y: auto;
+  transition: margin-left var(--sidebar-transition);
+}
+
+/* Adjust main content margin based on sidebar state for desktop */
+.layout-main-content:not(.mobile).sidebar-open {
+  margin-left: var(--sidebar-width-open);
+}
+
+.layout-main-content:not(.mobile).sidebar-closed {
+  margin-left: var(--sidebar-width-closed);
+}
+
+/* Specific styling for h1 within main content */
+.layout-main-content h1 {
+  color: var(--text-primary);
+  margin-bottom: 20px;
+  font-size: 2.2em;
+}
+
+/* Loading Spinner */
+.layout-loading-spinner-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background-color: var(--main-content-bg);
+}
+
+.layout-spinner {
+  border: 4px solid var(--border-color);
+  border-top: 4px solid var(--sidebar-active);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Sidebar-internal toggle button styles */
+.sidebar-toggle-button {
+  position: absolute;
+  top: calc(var(--header-height) / 2 - 21px);
+  right: 0px; /* Adjusted to prevent clipping */
+  z-index: 9999;
+  background: var(--sidebar-active);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--sidebar-shadow);
+  transition: right var(--sidebar-transition), background var(--sidebar-transition);
+}
+
+/* Adjust toggle button when sidebar is open (desktop) */
+.sidebar-container.sidebar-open .sidebar-toggle-button {
+  background: var(--sidebar-active);
+}
+
+.sidebar-toggle-icon {
+  width: 24px;
+  height: 24px;
+  color: currentColor;
+}
+
+/* Sidebar Item Padding & Alignment Adjustments (Mirroring AdminLayout.css) */
+.sidebar-nav-scroll-area {
+  padding: 20px 12px 20px 5px; /* Adjusted left padding */
+}
+
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-nav-scroll-area {
+  padding: 20px 0; /* Remove horizontal padding when closed for icons */
+}
+
+.sidebar-nav-item {
+  display: flex; /* Ensure flexbox for alignment */
+  align-items: center;
+  padding: 14px 16px 14px 10px; /* Adjusted left padding */
+  border-radius: 8px;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  position: relative;
+  transition: background var(--sidebar-transition), color var(--sidebar-transition);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-nav-item {
+  justify-content: center; /* Center content horizontally when closed */
+  padding: 14px 0; /* Remove horizontal padding when closed */
+}
+
+.sidebar-nav-item:hover {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
+}
+
+.sidebar-nav-item-active {
+  background: var(--sidebar-active-bg) !important;
+  color: var(--sidebar-active) !important;
+}
+
+.sidebar-nav-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  margin-right: 16px;
+  transition: margin var(--sidebar-transition);
+}
+
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-nav-icon-wrapper {
+  margin-right: 0; /* Removes margin when collapsed to center icon */
+  min-width: auto; /* Allow min-width to be auto so it doesn't force extra space */
+  width: 100%; /* Make icon wrapper take full width to help centering */
+}
+
+.sidebar-nav-icon-active {
+  color: var(--sidebar-active);
+}
+
+.sidebar-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  transition: color var(--sidebar-transition);
+}
+
+/* Note: There's no sidebar-icon-rotate class in RootLayout.css originally,
+   so this might be specific to AdminLayout.css or another file.
+   If needed, this should be added to RootLayout.css directly for specific icons. */
+
+.sidebar-nav-item-text {
+  transition: opacity var(--sidebar-transition);
+  font-weight: 500;
+}
+
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-nav-item-text {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+}
+
+.sidebar-active-indicator {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 24px;
+  background: var(--sidebar-active);
+  border-radius: 4px 0 0 4px;
+}
+
+/* User Profile in Sidebar Footer (Mirroring AdminLayout.css) */
+.sidebar-footer .user-profile {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  transition: padding var(--sidebar-transition);
+}
+
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-footer .user-profile {
+  justify-content: center; /* Center avatar in collapsed state */
+  padding: 0; /* Remove internal padding when closed to allow centering */
+}
+
+.sidebar-footer .avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--sidebar-active);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  margin-right: 12px; /* Default margin for open state */
+  flex-shrink: 0;
+}
+
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-footer .avatar {
+  margin-right: 0; /* Remove margin when collapsed */
+}
+
+.sidebar-footer .user-info {
+  transition: opacity var(--sidebar-transition);
+  overflow: hidden;
+}
+
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-footer .user-info {
+  opacity: 0;
+  width: 0;
+}
+
+.sidebar-footer .username {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+
+.sidebar-footer .user-role {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.sidebar-footer-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  transition: opacity var(--sidebar-transition);
+}
+
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-footer-text {
+  opacity: 0;
+}
+
+/* Mobile specific styles */
+@media (max-width: 768px) {
+  .layout-header {
+    padding-left: 20px;
+  }
+
+  .layout-main-content {
+    margin-left: 0;
+    padding: 15px;
+    padding-top: calc(var(--header-height) + 15px + 3px);
+  }
+
+  .sidebar-container.mobile .sidebar-toggle-button {
+    top: 15px;
+    left: 15px;
+    right: auto;
+    background: var(--sidebar-active);
+  }
+
+  .sidebar-container.mobile.sidebar-open .sidebar-toggle-button {
+    transform: translateX(calc(80vw - 60px));
+  }
+}

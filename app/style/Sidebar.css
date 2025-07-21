@@ -1,0 +1,331 @@
+/* app/style/Sidebar.css */
+:root {
+  /* --- Warm Light Color Variables (Updated to match Admin Theme) --- */
+  --sidebar-bg: #FFF5E0; /* Creamy off-white for header and sidebar */
+  --sidebar-text: #4A4A4A; /* Soft dark gray text on light backgrounds */
+  --sidebar-hover: #F0E0D0; /* Slightly darker cream for hover */
+  --sidebar-active: #007AFF; /* Vibrant blue for active states (from admin theme) */
+  --sidebar-active-bg: rgba(0, 122, 255, 0.1); /* Very light transparent blue for active background (from admin theme) */
+  --primary: #007AFF; /* Added for consistency, often used for buttons/links */
+  
+  --main-content-bg: #FFFFFF; /* Pure white for main content area */
+  --text-primary: #333333; /* Darker text for main content */
+  --text-secondary: #777777; /* Secondary text color */
+  --border-color: #E0E0E0; /* Very light gray for separators */
+  --header-bottom-border-color: #ADD8E6; /* Light blue color for header bottom border */
+
+  /* Existing layout variables */
+  --sidebar-width-open: 260px;
+  --sidebar-width-closed: 70px;
+  --sidebar-transition: 0.3s ease;
+  --sidebar-radius: 12px;
+  --sidebar-shadow: 0 5px 15px rgba(0, 0, 0, 0.08); /* Lighter shadow for light theme */
+  --header-height: 60px; 
+}
+
+/* Toggle button styles when it's inside the sidebar */
+.sidebar-toggle-button {
+  position: absolute; /* Positioned relative to its parent (.sidebar-container) */
+  top: calc(var(--header-height) / 2 - 21px); /* Vertically center with header's vertical mid-point */
+  right: 0px; /* Adjusted from -21px to 0px to prevent clipping */
+  z-index: 9999; /* Higher z-index to ensure visibility above other content */
+  background: var(--sidebar-active); /* Vibrant blue for contrast */
+  color: white; /* Ensures icon/text is visible on active background */
+  border: none;
+  border-radius: 8px;
+  width: 42px;
+  height: 42px;
+  display: flex; /* Always display */
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--sidebar-shadow);
+  transition: right var(--sidebar-transition), background var(--sidebar-transition), color var(--sidebar-transition); /* Added color transition */
+}
+
+/* Adjust toggle button position when sidebar is open */
+.sidebar-container.sidebar-open .sidebar-toggle-button {
+  background: var(--sidebar-active); /* Keep color consistent when open */
+}
+
+/* Adjust toggle button position when sidebar is closed */
+/* (Base .sidebar-toggle-button handles its default position, no specific 'closed' rule needed for 'right') */
+
+.sidebar-toggle-icon {
+  width: 24px;
+  height: 24px;
+  color: currentColor; /* Inherit color from button */
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 998; /* Below sidebar, above main content */
+  backdrop-filter: blur(3px);
+}
+
+.sidebar-container {
+  position: fixed; /* Keep it fixed relative to viewport */
+  left: 0;
+  background: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  z-index: 1000;
+  transition: width var(--sidebar-transition), transform var(--sidebar-transition); /* Transition width and transform only */
+  overflow: hidden; /* Keep overflow hidden for sidebar internal content */
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--sidebar-shadow);
+}
+
+/* Desktop styles for the sidebar container */
+.sidebar-container:not(.mobile) {
+  top: var(--header-height); /* Start sidebar below the header */
+  height: calc(100vh - var(--header-height)); /* Take up remaining height */
+  width: var(--sidebar-width-open); /* Default to open width */
+}
+
+.sidebar-container:not(.mobile).sidebar-closed {
+  width: var(--sidebar-width-closed); /* Collapsed width when closed */
+}
+
+/* Mobile specific styles for the sidebar container */
+@media (max-width: 768px) {
+  .sidebar-container.mobile {
+    top: 0; /* Starts from top on mobile as it overlays */
+    height: 100vh; /* Full height on mobile */
+    transform: translateX(-100%); /* Start off-screen on mobile */
+    width: 80%; /* Occupy 80% width on mobile */
+    max-width: 300px; /* Cap maximum width on larger mobile devices */
+  }
+
+  .sidebar-container.mobile.sidebar-open {
+    transform: translateX(0); /* Slide in when open on mobile */
+  }
+  
+  /* Mobile specific adjustments for the toggle button */
+  .sidebar-toggle-button {
+    top: 15px; /* Adjust top position for better look on mobile */
+    left: 15px; /* Adjust left position for better look on mobile */
+    right: auto; /* Override right positioning */
+    background: var(--sidebar-active); /* Use active color for mobile too */
+  }
+
+  .sidebar-toggle-button.open {
+    /* For mobile, when sidebar is open, the button shifts to the right edge of the sidebar */
+    transform: translateX(calc(80vw - 60px)); /* Approx width of sidebar - button width + padding */
+  }
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  padding: 24px 20px;
+  border-bottom: 1px solid var(--border-color);
+  transition: padding var(--sidebar-transition);
+}
+
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-logo {
+  padding: 24px 16px;
+  justify-content: center;
+}
+
+.logo-icon {
+  font-size: 26px;
+  margin-right: 12px;
+  min-width: 30px;
+  display: flex;
+  justify-content: center;
+  color: var(--sidebar-active);
+}
+
+.logo-text {
+  font-size: 20px;
+  font-weight: 700;
+  transition: opacity var(--sidebar-transition);
+  white-space: nowrap;
+}
+
+.sidebar-container.sidebar-closed:not(.mobile) .logo-text {
+  opacity: 0;
+  width: 0;
+  overflow: hidden; /* Hide text when closed */
+}
+
+.sidebar-nav-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 12px 20px 5px; /* Adjusted left padding for open state */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.1) transparent;
+}
+
+.sidebar-nav-scroll-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-nav-scroll-area::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 3px;
+}
+
+.sidebar-nav-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Adjustments for closed sidebar scroll area */
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-nav-scroll-area {
+  padding: 20px 0; /* Remove horizontal padding when closed for icons */
+}
+
+.sidebar-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px 14px 10px; /* Adjusted left padding for open state */
+  border-radius: 8px;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  position: relative;
+  transition: background var(--sidebar-transition), color var(--sidebar-transition);
+  white-space: nowrap; /* Prevent text wrap */
+  overflow: hidden; /* Hide text when it overflows */
+}
+
+.sidebar-nav-item:hover {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
+}
+
+.sidebar-nav-item-active {
+  background: var(--sidebar-active-bg) !important;
+  color: var(--sidebar-active) !important;
+}
+
+.sidebar-nav-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px; /* Ensure a fixed minimum width for the icon wrapper */
+  margin-right: 16px; /* Space between icon and text when open */
+  transition: margin var(--sidebar-transition);
+}
+
+/* Adjustments for closed sidebar icon wrapper */
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-nav-icon-wrapper {
+  margin-right: 0; /* Remove margin when collapsed to center icon */
+  min-width: auto; /* Allow min-width to be auto so it doesn't force extra space */
+  width: 100%; /* Make icon wrapper take full width to help centering */
+}
+
+.sidebar-nav-icon-active {
+  color: var(--sidebar-active);
+}
+
+.sidebar-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0; /* Prevent icon from shrinking */
+  transition: color var(--sidebar-transition);
+}
+
+.sidebar-nav-item-text {
+  transition: opacity var(--sidebar-transition);
+  font-weight: 500;
+}
+
+/* Adjustments for closed sidebar text */
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-nav-item-text {
+  opacity: 0; /* Fade out text */
+  width: 0; /* Collapse text width */
+  overflow: hidden; /* Hide overflowed text */
+}
+
+.sidebar-active-indicator {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 24px;
+  background: var(--sidebar-active);
+  border-radius: 4px 0 0 4px;
+}
+
+.sidebar-footer {
+  padding: 20px 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  transition: padding var(--sidebar-transition);
+}
+
+/* Adjustments for closed sidebar user profile */
+.sidebar-container.sidebar-closed:not(.mobile) .user-profile {
+  justify-content: center; /* Center avatar in collapsed state */
+  padding: 0; /* Remove internal padding when closed to allow centering */
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--sidebar-active);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  margin-right: 12px; /* Default margin for open state */
+  flex-shrink: 0;
+}
+
+/* Adjustments for closed sidebar avatar */
+.sidebar-container.sidebar-closed:not(.mobile) .avatar {
+  margin-right: 0; /* Remove margin when collapsed */
+}
+
+.user-info {
+  transition: opacity var(--sidebar-transition);
+  overflow: hidden;
+}
+
+/* Adjustments for closed sidebar user info (name/role) */
+.sidebar-container.sidebar-closed:not(.mobile) .user-info {
+  opacity: 0;
+  width: 0;
+}
+
+.username {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+
+.user-role {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.sidebar-footer-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+  transition: opacity var(--sidebar-transition);
+}
+
+/* Adjustments for closed sidebar footer text */
+.sidebar-container.sidebar-closed:not(.mobile) .sidebar-footer-text {
+  opacity: 0;
+}

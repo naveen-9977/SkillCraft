@@ -4,23 +4,23 @@ export default function Clients() {
   const clients = [
     {
       imageUrl:
-        "https://tailwindui.com/plus/img/logos/158x48/transistor-logo-gray-900.svg",
+        "/1.svg",
     },
     {
       imageUrl:
-        "https://tailwindui.com/plus/img/logos/158x48/reform-logo-gray-900.svg",
+        "/2.svg",
     },
     {
       imageUrl:
-        "https://tailwindui.com/plus/img/logos/158x48/tuple-logo-gray-900.svg",
+        "/3.svg",
     },
     {
       imageUrl:
-        "https://tailwindui.com/plus/img/logos/158x48/statamic-logo-gray-900.svg",
+        "/4.svg",
     },
     {
       imageUrl:
-        "https://tailwindui.com/plus/img/logos/laravel-logo-gray-900.svg",
+        "/5.svg",
     },
     {
       imageUrl:

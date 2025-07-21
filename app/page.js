@@ -1,3 +1,5 @@
+"use client"
+
 import Image from "next/image";
 import Hero from "./components/Hero";
 import Clients from "./components/Clients";
@@ -16,7 +18,7 @@ export default function Home() {
       <Services/>
       <WhyUs/>
       <CTA/>
-      <BlogsCmp/>
+      {/* <BlogsCmp/> */}
       <Testimonials/>
     </>
   );

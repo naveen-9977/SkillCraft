@@ -3,26 +3,56 @@ import Users from "@/schema/Users";
 import { NextResponse } from "next/server";
 import bcrypt from "bcrypt";
 
-export async function POST(req, res) {
-  const { name, email, password, confirmPassword } = await req.json(); //gets the req.body
+export async function POST(req) {
   try {
-    ConnectToDB(); // connects to DB
-    if (password === confirmPassword) {
-      let encryptedPassword;
+    const { name, email, password, confirmPassword } = await req.json();
 
-      bcrypt.hash(password, 10, async function (err, hash) {
-        encryptedPassword = hash;
-        await Users.create({
-          name: name,
-          email: email,
-          password: encryptedPassword,
-          isAdmin: false,
-        }); // create user account
-        console.log("Account created");
-      });
+    // Basic validation
+    if (!name || !email || !password || !confirmPassword) {
+      return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
-  } catch (e) {
-    console.log("Something went wrong");
+
+    if (password !== confirmPassword) {
+      return NextResponse.json({ error: "Passwords do not match" }, { status: 400 });
+    }
+
+    try {
+      await ConnectToDB();
+    } catch (error) {
+      console.error('Database connection error:', error);
+      return NextResponse.json(
+        { error: "Database connection failed. Please try again." },
+        { status: 500 }
+      );
+    }
+
+    // Check for existing user
+    const existingUser = await Users.findOne({ email });
+    if (existingUser) {
+      return NextResponse.json({ error: "Email already registered" }, { status: 409 });
+    }
+
+    // Create new user
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new Users({
+      name,
+      email,
+      password: hashedPassword,
+      isAdmin: false,
+    });
+
+    await user.save();
+
+    return NextResponse.json(
+      { success: true, message: "Account created successfully" },
+      { status: 201 }
+    );
+
+  } catch (error) {
+    console.error('Registration error:', error);
+    return NextResponse.json(
+      { error: "Registration failed. Please try again." },
+      { status: 500 }
+    );
   }
-  return NextResponse.json("works");
 }

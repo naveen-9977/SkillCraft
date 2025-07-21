@@ -1,3 +1,5 @@
+
+
 import Link from "next/link";
 import React from "react";
 
@@ -21,13 +23,13 @@ export default function Hero() {
           or <Link href={"/"} className="text-primary hover:underline">contact us</Link> today to start
           crafting your path to success with SkillCrafters.
         </p>
-        <button className="mt-10 bg-primary text-white px-4 py-2 rounded w-fit">
+        <Link href={"/login"} className="mt-10 bg-primary text-white px-4 py-2 rounded w-fit">
           Get Started
-        </button>
+        </Link>
       </div>
       <div className="md:w-1/2 mt-6 flex items-center justify-center xl:p-10">
         <img
-          src="https://hyprland.org/imgs/ricing_competitions/1/amadeus.webp"
+          src="/hero.jpg"
           alt=""
           className="rounded-lg w-full h-[300px] md:h-[470px] object-cover"
         />

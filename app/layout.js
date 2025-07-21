@@ -23,7 +23,7 @@ export default function RootLayout({ children }) {
   const pathname= usePathname()
   return (
     <html lang="en">
-      <body className={`${inter.className} antialiased`}>
+      <body className={`antialiased`}>
         {!pathname.startsWith("/dashboard") && !pathname.startsWith("/admin") && <Navbar/> }
         {/* <Navbar/> */}
         <div className="">{children}</div>

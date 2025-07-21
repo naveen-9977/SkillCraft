@@ -1,3 +1,4 @@
+import Link from "next/link";
 import React from "react";
 
 export default function Footer() {
@@ -11,10 +12,6 @@ export default function Footer() {
       href: "/blogs",
     },
     {
-      name: "Courses",
-      href: "/courses",
-    },
-    {
       name: "Services",
       href: "/services",
     },
@@ -22,10 +19,7 @@ export default function Footer() {
       name: "About",
       href: "/about",
     },
-    {
-      name: "Contact",
-      href: "/contact",
-    },
+
   ];
 
   const socials = [
@@ -48,7 +42,9 @@ export default function Footer() {
       <section className="text-secondary py-10 lg:py-12 mt-8 ">
         <div className="grid container px-4 m-auto sm:grid-cols-2 gap-10 md:grid-cols-3 lg:grid-cols-4">
           <div className="">
-            <h2>Logo Here</h2>
+            <h2 className="font-medium flex gap-2 items-center">
+              <img src="/logo.svg" alt="" className="h-6" />  <span>SkillCrafters</span>
+            </h2>
             <p className="  py-2">
               SkillCrafters is an innovative online coaching platform designed
               to help students excel in competitive exams.
@@ -60,7 +56,7 @@ export default function Footer() {
             </h4>
             <ul className="space-y-3">
               {links.map((link) => (
-                <li key={link.name}>{link.name}</li>
+                <li key={link.name}> <Link href={link.href}>{link.name}</Link></li>
               ))}
             </ul>
           </div>
@@ -75,18 +71,18 @@ export default function Footer() {
           <div className="">
             <h4 className="text-primary font-semibold text-xl">Address</h4>
             <p className="  mb-4">
-              Balaji Colony, Dhamtari, <br /> Chhattisgarh 493773
+              DDU Nagar, Raipur, <br /> Chhattisgarh 492010
             </p>
             <h4 className="text-primary font-semibold text-xl">Phone</h4>
-            <p className="  mb-4">+91 346548765</p>
+            <p className="  mb-4">+91 9977429858</p>
             <h4 className="text-primary font-semibold text-xl">Email</h4>
-            <p className="  mb-4">mail@mailinator.com</p>
+            <p className="  mb-4">mail@skillcrafters.in</p>
           </div>
         </div>
       </section>
       <footer className=" pb-5  ">
         <div className="container m-auto px-4 text-center text-paragraph/80">
-          &copy; Copyrights 2024 skillcrafters.in. All rights reserved.
+          &copy; Copyrights 2025 skillcrafters.in. All rights reserved.
         </div>
       </footer>
     </>

@@ -67,7 +67,7 @@ export default function Testimonials() {
             </p>
             <div className="flex items-center gap-3">
               <img
-                src="https://websitedemos.net/general-hospital-04/wp-content/uploads/sites/1482/2023/07/testimonial-skip-01.jpg"
+         src="/avatar.png"
                 alt=""
                 className="rounded-full w-10"
               />
@@ -132,11 +132,11 @@ export default function Testimonials() {
             </p>
             <div className="flex items-center gap-3">
               <img
-                src="https://websitedemos.net/general-hospital-04/wp-content/uploads/sites/1482/2023/07/testimonial-skip-01.jpg"
+                src="/avatar.png"
                 alt=""
                 className="rounded-full w-10"
               />
-              <h5 className="font-medium">Priya Sharma</h5>
+              <h5 className="font-medium">Tanaya Shukla</h5>
             </div>
           </div>
           <div className="bg-white ring-1 ring-[#E7E7E7] p-5 rounded">
@@ -197,11 +197,11 @@ export default function Testimonials() {
             </p>
             <div className="flex items-center gap-3">
               <img
-                src="https://websitedemos.net/general-hospital-04/wp-content/uploads/sites/1482/2023/07/testimonial-skip-01.jpg"
+                src="/avatar.png"
                 alt=""
                 className="rounded-full w-10"
               />
-              <h5 className="font-medium">Rahul Verma</h5>
+              <h5 className="font-medium">Ishanya Jha</h5>
             </div>
           </div>
           <div className="bg-white ring-1 ring-[#E7E7E7] p-5 rounded">
@@ -262,11 +262,11 @@ export default function Testimonials() {
             </p>
             <div className="flex items-center gap-3">
               <img
-                src="https://websitedemos.net/general-hospital-04/wp-content/uploads/sites/1482/2023/07/testimonial-skip-01.jpg"
+                src="/avatar.png"
                 alt=""
                 className="rounded-full w-10"
               />
-              <h5 className="font-medium">Ananya Gupta</h5>
+              <h5 className="font-medium">Komal Rajput</h5>
             </div>
           </div>
         </div>

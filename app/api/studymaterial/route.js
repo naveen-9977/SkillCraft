@@ -1,80 +1,79 @@
-import ConnectToDB from "@/DB/ConnectToDB";
 import { NextResponse } from "next/server";
-import bcrypt from "bcrypt";
-import Batch1 from "@/schema/Batch1";
+import ConnectToDB from "@/DB/ConnectToDB";
+import StudyMaterial from "@/schema/StudyMaterial";
+import Users from "@/schema/Users";
+import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 
-export async function GET() {
+// Utility function to verify user and get their batch codes
+async function verifyUserAndGetBatchCodes(req) { // NEW: Renamed function
   try {
-    ConnectToDB();
-    let allEntries = await Batch1.find({});
+    const cookieStore = cookies();
+    const token = cookieStore.get('token');
 
-    // if all entries 0 then create 3 of them
-
-    if (allEntries.length == 0) {
-      await Batch1.create({
-        batchName: "Mastering React In 1 Months",
-        batchCreatedAt: "10/12/24",
-        batchCode: "#cqhef",
-        subjects: "Programming Fundamentals, Java Script, React JS, Express JS",
-        studyMaterial: [
-          {
-            title: "50+ ReactJS Interview Questions",
-            mentor: "Kunal Rajput",
-            resourceUrl: "/SM-pdf1.pdf",
-            resourceType: "pdf",
-          },
-          {
-            title: "React interview questions",
-            mentor: "Kunal Rajput",
-            resourceUrl: "/SM-pdf2.pdf",
-            resourceType: "pdf",
-          },
-          {
-            title: "Top 70 ReactJS Interview Questions and Answers",
-            mentor: "Kunal Rajput",
-            resourceUrl: "/SM-pdf3.pdf",
-            resourceType: "pdf",
-          },
-        ],
-        announcements: [
-          {
-            title: "Mock Test Updates Now Live!",
-            mentor: "Pooja Kanetkar",
-            message:
-              "Our mock tests just got better! New exam simulations, improved feedback, and detailed performance analysis are now live. Test your skills and enhance your preparation today.",
-          },
-          {
-            title: "SkillCrafters Launching Mobile App!",
-            mentor: "Pooja Kanetkar",
-            message:
-              "Great news! SkillCrafters is now available on mobile. Download our app to study on the go, access mock tests, and track your progress anytime, anywhere.",
-          },
-        ],
-        assignments: [
-          {
-            title: "Simple JavaScript Assignments",
-            mentor: "Roma Singh",
-            resourceUrl: "/A-pdf1.pdf",
-            resourceType: "pdf",
-          },
-          {
-            title: "JavaScript Parctice PDF",
-            mentor: "Roma Singh",
-            resourceUrl: "/A-pdf2.pdf",
-            resourceType: "pdf",
-          },
-        ],
-      });
-
-      let allData = await Batch1.find({});
-
-      return NextResponse.json({ data: allData });
-    } else {
-      return NextResponse.json({ data: allEntries });
+    if (!token) {
+      return { success: false, error: 'No token found', status: 401 };
     }
-  } catch (err) {
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
+    } catch (jwtError) {
+      console.error("JWT verification failed:", jwtError);
+      return { success: false, error: 'Invalid token', status: 401 };
+    }
+
+    if (!decoded.userId || !mongoose.Types.ObjectId.isValid(decoded.userId)) {
+      console.error("Invalid userId format in token:", decoded.userId);
+      return { success: false, error: 'Invalid user ID format in token', status: 401 };
+    }
+
+    await ConnectToDB(); 
+
+    // NEW: Select batchCodes (plural)
+    const user = await Users.findById(decoded.userId).select('batchCodes status'); 
+
+    if (!user) {
+      return { success: false, error: 'User not found', status: 404 };
+    }
+
+    // NEW: Check if user is approved and has at least one batch code
+    if (user.status !== 'approved' || !Array.isArray(user.batchCodes) || user.batchCodes.length === 0) {
+      return { success: false, error: 'User not approved or not assigned to any batch. Please contact your administrator.', status: 403 };
+    }
+
+    // NEW: Return batchCodes array
+    return { success: true, userBatchCodes: user.batchCodes };
+  } catch (error) {
+    console.error("Detailed Authentication Failed Error in verifyUserAndGetBatchCodes (study material API):", error);
+    return { success: false, error: `Authentication failed: ${error.message || 'Unknown error'}`, status: 500 };
+  }
+}
+
+// GET method to fetch study materials for the authenticated student's batch
+export async function GET(req) {
+  try {
+    const authResult = await verifyUserAndGetBatchCodes(req); // NEW: Call updated function
+    if (!authResult.success) {
+      return NextResponse.json(
+        { error: authResult.error },
+        { status: authResult.status }
+      );
+    }
+
+    await ConnectToDB();
+
+    const studentBatchCodes = authResult.userBatchCodes; // NEW: Get array of batch codes
+
+    // NEW: Filter study materials by ANY of the authenticated student's batch codes
+    const studyMaterials = await StudyMaterial.find({ batchCode: { $in: studentBatchCodes } }).sort({ createdAt: -1 });
+
+    return NextResponse.json({ studyMaterials }, { status: 200 });
+  } catch (error) {
+    console.error("Error fetching student study materials:", error);
     return NextResponse.json(
-      { message: "something went wrong" },
+      { error: "Failed to fetch study materials" },
       { status: 500 }
     );
   }

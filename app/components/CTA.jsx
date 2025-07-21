@@ -17,10 +17,10 @@ export default function CTA() {
             started!
           </p>
           <Link
-            href="/contact"
+            href="/signup"
             className="mt-8 bg-primary text-white px-3 py-2 rounded w-fit"
           >
-            Connect with us
+            Lets Get Started
           </Link>
         </div>
         <div className="hidden lg:flex w-1/2">

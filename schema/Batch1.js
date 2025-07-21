@@ -12,23 +12,14 @@ const bstch1Schema = new Schema(
     batchCode: {
       type: String,
       required: true,
+      unique: true, // Ensure batch codes are unique
     },
     subjects: {
       type: String,
       required: true,
     },
-    tests: {
-      type: Array,
-    },
-    studyMaterial: {
-      type: Array,
-    },
-    announcements: {
-      type: Array,
-    },
-    assignments: {
-      type: Array,
-    },
+    // Removed tests, studyMaterial, announcements, and assignments arrays
+    // These will now be managed by their own schemas with a batchCode reference
   },
   { timestamps: true }
 );

@@ -1,51 +1,62 @@
-import ConnectToDB from "@/DB/ConnectToDB";
-import Users from "@/schema/Users";
-import bcrypt from "bcrypt";
-import jsonwebtoken from "jsonwebtoken";
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+// app/api/login/route.js (or similar authentication route)
+import { NextResponse } from 'next/server';
+import dbConnect from '@/lib/dbConnect';
+import User from '@/schema/Users';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+// Removed direct import of cookies here to ensure it's called only within the function
+// import { cookies } from 'next/headers'; 
 
-export async function POST(req, res) {
-  const { name, password } = await req.json(); //gets the req.body
+export async function POST(request) {
+  // NEW: Import cookies directly inside the function to ensure server-side context
+  const { cookies } = await import('next/headers'); 
 
-  let cookieStore = cookies();
+  await dbConnect();
 
   try {
-    ConnectToDB(); //connects to the DB
-    const user = await Users.findOne({ name: name }); //checks if user exists or not
+    const { email, password } = await request.json();
 
-    if (user) {
-      console.log(user);
-      const isVailed = await bcrypt.compare(password, user.password); // checks if passwd is vailed
-      if (isVailed) {
-        const token = jsonwebtoken.sign(
-          { id: user._id },
-          process.env.JWT_SECRET
-        );
-        await cookieStore.set("token", token, {
-          expires: Date.now() + 24 * 60 * 60 * 1000 * 400,
-        }); // sets jwt to cookie
-        return NextResponse.json({ messege: "success", isAdmin: user.isAdmin }, { status: 200 });
-      } else {
-        return NextResponse.json(
-          { messege: "Invailed credentials" },
-          { status: 401 }
-        );
-      }
-    } else {
-      //say invailed credentials
-      return NextResponse.json(
-        { messege: "invailed credentials" },
-        { status: 401 }
-      );
+    if (!email || !password) {
+      return NextResponse.json({ error: "Email and password are required" }, { status: 400 });
     }
-  } catch (err) {
-    console.log(err);
 
-    // returns something went wrong
-    return NextResponse.json(
-      { messege: "something went wrong" },
-      { status: 500 }
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+    }
+
+    const isValidPassword = await bcrypt.compare(password, user.password);
+
+    if (!isValidPassword) {
+      return NextResponse.json({ error: "Invalid email or password" }, { status: 401 });
+    }
+
+    const token = jwt.sign(
+      { userId: user._id, email: user.email, isAdmin: user.isAdmin, batchCodes: user.batchCodes, status: user.status },
+      process.env.JWT_SECRET || 'your-secret-key-fallback',
+      { expiresIn: '1h' }
     );
+
+    // Set the token in a httpOnly cookie
+    cookies().set('token', token, { // cookies() is now available from the import inside the function
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 60 * 60 * 1000,
+      path: '/',
+    });
+
+    return NextResponse.json({ success: true, message: "Login successful", user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      isAdmin: user.isAdmin,
+      status: user.status,
+      batchCodes: user.batchCodes
+    }}, { status: 200 });
+
+  } catch (error) {
+    console.error("Error during login:", error);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
