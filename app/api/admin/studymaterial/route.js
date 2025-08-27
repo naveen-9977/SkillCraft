@@ -18,7 +18,6 @@ async function verifyAdminOrMentor(req) {
     
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
     await ConnectToDB();
-    // FIX: Added 'name' to the fields being selected
     const user = await Users.findById(decoded.userId).select('name role batchCodes');
 
     if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
@@ -30,7 +29,7 @@ async function verifyAdminOrMentor(req) {
   }
 }
 
-// GET method to fetch batches and study materials
+// GET method remains the same
 export async function GET(req) {
   try {
     const authResult = await verifyAdminOrMentor(req);
@@ -58,7 +57,7 @@ export async function GET(req) {
   }
 }
 
-// POST method to create a new folder or upload a file
+
 export async function POST(req) {
   try {
     const authResult = await verifyAdminOrMentor(req);
@@ -69,11 +68,17 @@ export async function POST(req) {
     const formData = await req.formData();
     const type = formData.get('type');
     const title = formData.get('title');
+    const description = formData.get('description');
+    const thumbnailUrlFile = formData.get('thumbnailUrl');
     const parent = formData.get('parent') || null;
     const batchCode = formData.get('batchCode');
     const resourceFile = formData.get('resourceFile');
+    const youtubeUrl = formData.get('youtubeUrl');
+    const isPremium = formData.get('isPremium') === 'true';
+    const requiredTier = formData.get('requiredTier');
+    const dripDate = formData.get('dripDate');
 
-    // FIX: Get mentor name from the authenticated user object
+
     const mentorName = authResult.user.name; 
 
     if (!type || !title || !batchCode) {
@@ -86,26 +91,58 @@ export async function POST(req) {
 
     await ConnectToDB();
     let newMaterial;
+    
+    const materialData = {
+        title,
+        description,
+        type,
+        parent,
+        batchCode,
+        mentor: mentorName,
+        createdBy: authResult.user._id,
+        isPremium,
+        requiredTier: isPremium ? requiredTier : undefined,
+        dripDate: dripDate ? new Date(dripDate) : undefined,
+    };
+
 
     if (type === 'folder') {
-      newMaterial = await StudyMaterial.create({
-        title, type: 'folder', parent, batchCode, mentor: mentorName, createdBy: authResult.user._id,
-      });
+      newMaterial = await StudyMaterial.create(materialData);
     } else if (type === 'file') {
-      if (!resourceFile) {
-        return NextResponse.json({ error: "File is required for file type material" }, { status: 400 });
-      }
-      const uploadDir = path.join(process.cwd(), 'public', 'study_materials');
-      await fs.mkdir(uploadDir, { recursive: true });
-      const uniqueFileName = `${Date.now()}-${resourceFile.name.replace(/\s/g, '_')}`;
-      const filePath = path.join(uploadDir, uniqueFileName);
-      const fileBuffer = Buffer.from(await resourceFile.arrayBuffer());
-      await fs.writeFile(filePath, fileBuffer);
-      const resourceUrl = `/study_materials/${uniqueFileName}`;
+        if (!resourceFile) {
+            return NextResponse.json({ error: "File is required for file type material" }, { status: 400 });
+        }
+        // Handle the main resource file upload
+        const uploadDir = path.join(process.cwd(), 'public', 'study_materials');
+        await fs.mkdir(uploadDir, { recursive: true });
+        const uniqueFileName = `${Date.now()}-${resourceFile.name.replace(/\s/g, '_')}`;
+        const filePath = path.join(uploadDir, uniqueFileName);
+        const fileBuffer = Buffer.from(await resourceFile.arrayBuffer());
+        await fs.writeFile(filePath, fileBuffer);
+        materialData.resourceUrl = `/study_materials/${uniqueFileName}`;
+        
+        // Handle the thumbnail file upload if it exists
+        if (thumbnailUrlFile && thumbnailUrlFile.name) {
+            const thumbUploadDir = path.join(process.cwd(), 'public', 'study_thumbnails');
+            await fs.mkdir(thumbUploadDir, { recursive: true });
+            const thumbUniqueFileName = `${Date.now()}-thumb-${thumbnailUrlFile.name.replace(/\s/g, '_')}`;
+            const thumbFilePath = path.join(thumbUploadDir, thumbUniqueFileName);
+            const thumbFileBuffer = Buffer.from(await thumbnailUrlFile.arrayBuffer());
+            await fs.writeFile(thumbFilePath, thumbFileBuffer);
+            materialData.thumbnailUrl = `/study_thumbnails/${thumbUniqueFileName}`;
+        }
+        
+        newMaterial = await StudyMaterial.create(materialData);
 
-      newMaterial = await StudyMaterial.create({
-        title, type: 'file', parent, batchCode, resourceUrl, mentor: mentorName, createdBy: authResult.user._id,
-      });
+    } else if (type === 'youtube_video' || type === 'youtube_playlist') {
+        if (!youtubeUrl) {
+            return NextResponse.json({ error: "YouTube URL is required" }, { status: 400 });
+        }
+        materialData.youtubeUrl = youtubeUrl;
+        // For YouTube links, the thumbnailUrl is a string URL from the form data
+        materialData.thumbnailUrl = formData.get('thumbnailUrl');
+        newMaterial = await StudyMaterial.create(materialData);
+
     } else {
       return NextResponse.json({ error: "Invalid material type" }, { status: 400 });
     }
@@ -129,7 +166,7 @@ export async function POST(req) {
   }
 }
 
-// DELETE method to delete a file or a folder (and its contents)
+// DELETE method is unchanged
 export async function DELETE(req) {
     try {
         const authResult = await verifyAdminOrMentor(req);
@@ -156,17 +193,26 @@ export async function DELETE(req) {
         const idsToDelete = [materialToDelete._id];
         const filesToDelete = [];
 
-        if (materialToDelete.type === 'file' && materialToDelete.resourceUrl) {
+        if (materialToDelete.resourceUrl) {
             filesToDelete.push(materialToDelete.resourceUrl);
-        } else if (materialToDelete.type === 'folder') {
+        }
+        if (materialToDelete.thumbnailUrl && materialToDelete.thumbnailUrl.startsWith('/study_thumbnails/')) {
+            filesToDelete.push(materialToDelete.thumbnailUrl);
+        }
+
+        if (materialToDelete.type === 'folder') {
             const children = await StudyMaterial.find({ parent: materialToDelete._id });
             const queue = [...children];
             while (queue.length > 0) {
                 const current = queue.shift();
                 idsToDelete.push(current._id);
-                if (current.type === 'file' && current.resourceUrl) {
+                if (current.resourceUrl) {
                     filesToDelete.push(current.resourceUrl);
-                } else if (current.type === 'folder') {
+                }
+                if (current.thumbnailUrl && current.thumbnailUrl.startsWith('/study_thumbnails/')) {
+                    filesToDelete.push(current.thumbnailUrl);
+                }
+                if (current.type === 'folder') {
                     const grandchildren = await StudyMaterial.find({ parent: current._id });
                     queue.push(...grandchildren);
                 }

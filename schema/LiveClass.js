@@ -11,14 +11,14 @@ const liveClassSchema = new mongoose.Schema({
   },
   mentor: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Users', // CORRECTED: Reference the Users collection
+    ref: 'Users', 
     required: true,
   },
-  batch: {
+  // UPDATED: batch is now an array of ObjectIds
+  batch: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'batch1', 
-    required: true,
-  },
+  }],
   startTime: {
     type: Date,
     required: true,
@@ -35,10 +35,9 @@ const liveClassSchema = new mongoose.Schema({
       return this.classType === 'external';
     },
   },
-  // NEW: Add a field to track the creator
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Users', // Reference to the Users model
+    ref: 'Users',
     required: true,
   },
   createdAt: {

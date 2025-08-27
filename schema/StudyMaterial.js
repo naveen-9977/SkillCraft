@@ -6,13 +6,19 @@ const studyMaterialSchema = new mongoose.Schema({
     required: [true, "Title is required"],
     trim: true,
   },
-  // Type can be either 'folder' or 'file'
+  description: {
+    type: String,
+    trim: true,
+  },
+  thumbnailUrl: {
+      type: String,
+      trim: true,
+  },
   type: {
     type: String,
-    enum: ['folder', 'file'],
+    enum: ['folder', 'file', 'youtube_video', 'youtube_playlist'],
     required: true,
   },
-  // ID of the parent folder, null for root items within a batch
   parent: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'StudyMaterial',
@@ -23,8 +29,16 @@ const studyMaterialSchema = new mongoose.Schema({
     required: [true, "Batch code is required"],
     trim: true,
   },
-  // resourceUrl is only required for files
   resourceUrl: {
+    type: String,
+    trim: true,
+  },
+  youtubeUrl: {
+    type: String,
+    trim: true,
+  },
+  // This field is crucial for the sync button
+  youtubePlaylistId: {
     type: String,
     trim: true,
   },
@@ -36,6 +50,13 @@ const studyMaterialSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Users',
     required: true,
+  },
+  isPremium: {
+      type: Boolean,
+      default: false,
+  },
+  dripDate: {
+      type: Date,
   },
 }, { timestamps: true });
 

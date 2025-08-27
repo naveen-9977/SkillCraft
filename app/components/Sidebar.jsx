@@ -11,7 +11,6 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, user }) {
     setIsOpen(!isOpen);
   };
 
-  // UPDATED: Renamed "Overview" to "Dashboard"
   const navItems = [
     {
       name: "Dashboard",
@@ -66,7 +65,7 @@ export default function Sidebar({ isOpen, setIsOpen, isMobile, user }) {
           className={`sidebar-toggle-button ${isOpen ? 'open' : ''}`}
           aria-label={isOpen ? "Close sidebar" : "Open sidebar"}
         >
-          {isOpen ? ( <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="sidebar-toggle-icon"> <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /> </svg> ) : ( <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="sidebar-toggle-icon"> <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" /> </svg> )}
+          {isOpen ? ( <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="sidebar-toggle-icon"> <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /> </svg> ) : ( <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="sidebar-toggle-icon"> <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-1.5 5.25h16.5" /> </svg> )}
         </button>
         <div className="sidebar-nav-scroll-area">
           <nav className="sidebar-nav-list">

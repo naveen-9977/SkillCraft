@@ -1,0 +1,19 @@
+/* app/dashboard/studymaterial/splitview.css */
+.split-view-container {
+    display: flex;
+    gap: 1.5rem;
+    height: calc(100vh - 12rem); /* Adjust height as needed */
+}
+
+.file-list-pane {
+    flex: 1;
+    min-width: 300px;
+    max-width: 40%;
+    overflow-y: auto;
+}
+
+.video-player-pane {
+    flex: 2;
+    display: flex;
+    flex-direction: column;
+}

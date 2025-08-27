@@ -2,13 +2,12 @@ import { NextResponse } from "next/server";
 import ConnectToDB from "@/DB/ConnectToDB";
 import LiveClass from "@/schema/LiveClass";
 import Joi from "joi";
-import Users from "@/schema/Users"; // CORRECTED: Use Users model for population
+import Users from "@/schema/Users"; 
 import Batch1 from "@/schema/Batch1";
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
-import Notification from "@/schema/Notification"; // Import the Notification schema
+import Notification from "@/schema/Notification";
 
-// This function remains the same
 async function verifyAdminOrMentor(req) {
   try {
     const cookieStore = cookies();
@@ -31,7 +30,7 @@ const schema = Joi.object({
     topic: Joi.string().required(),
     description: Joi.string().required(),
     mentor: Joi.string().required(),
-    batch: Joi.string().required(),
+    batch: Joi.array().items(Joi.string()).min(1).required(),
     startTime: Joi.date().required(),
     classType: Joi.string().valid('webrtc', 'external').required(),
     link: Joi.when('classType', {
@@ -41,7 +40,6 @@ const schema = Joi.object({
     }),
 }).unknown(true);
 
-// GET method is updated
 export async function GET(req) {
     try {
         const authResult = await verifyAdminOrMentor(req);
@@ -60,7 +58,6 @@ export async function GET(req) {
             }
         }
         const classes = await LiveClass.find(batchQuery)
-            // CORRECTED: Populate from Users model
             .populate([{ path: 'mentor', model: Users, select: 'name' }, { path: 'batch', model: Batch1, select: 'batchName' }])
             .sort({ startTime: -1 });
         return NextResponse.json({ success: true, data: classes });
@@ -70,7 +67,6 @@ export async function GET(req) {
     }
 }
 
-// POST method is updated
 export async function POST(req) {
     try {
         const authResult = await verifyAdminOrMentor(req);
@@ -85,39 +81,45 @@ export async function POST(req) {
             return NextResponse.json({ success: false, message: error.details[0].message }, { status: 400 });
         }
         
-        const targetBatchDoc = await Batch1.findById(body.batch);
-        if (!targetBatchDoc) {
-            return NextResponse.json({ success: false, message: "Target batch not found." }, { status: 404 });
+        const targetBatchDocs = await Batch1.find({ _id: { $in: body.batch } });
+        if (targetBatchDocs.length !== body.batch.length) {
+            return NextResponse.json({ success: false, message: "One or more selected batches not found." }, { status: 404 });
         }
 
-        if (authResult.user.role === 'mentor' && !authResult.user.batchCodes.includes(targetBatchDoc.batchCode)) {
-            return NextResponse.json({ success: false, message: "You are not assigned to this batch." }, { status: 403 });
+        if (authResult.user.role === 'mentor') {
+            const mentorBatchCodes = authResult.user.batchCodes;
+            const selectedBatchCodes = targetBatchDocs.map(doc => doc.batchCode);
+            const isAuthorized = selectedBatchCodes.every(code => mentorBatchCodes.includes(code));
+            if (!isAuthorized) {
+                return NextResponse.json({ success: false, message: "You are not assigned to one or more selected batches." }, { status: 403 });
+            }
         }
 
         const newClass = await LiveClass.create({ ...body, createdBy: authResult.user._id });
         
-        // --- Notification Logic ---
         if (newClass) {
+            const targetBatchCodes = targetBatchDocs.map(doc => doc.batchCode);
             const usersToNotify = await Users.find({
                 role: 'student',
                 status: 'approved',
-                batchCodes: targetBatchDoc.batchCode
+                batchCodes: { $in: targetBatchCodes }
             });
 
-            for (const student of usersToNotify) {
-                await Notification.create({
-                    user: student._id,
-                    message: `A new live class "${newClass.topic}" has been scheduled for your batch.`,
-                    link: "/dashboard/live-classes",
-                    batchCode: targetBatchDoc.batchCode,
-                    type: "new_announcement"
-                });
+            for (const batchDoc of targetBatchDocs) {
+                const studentsInBatch = usersToNotify.filter(user => user.batchCodes.includes(batchDoc.batchCode));
+                for (const student of studentsInBatch) {
+                    await Notification.create({
+                        user: student._id,
+                        message: `A new live class "${newClass.topic}" has been scheduled for your batch.`,
+                        link: "/dashboard/live-classes",
+                        batchCode: batchDoc.batchCode,
+                        type: "new_announcement"
+                    });
+                }
             }
         }
-        // --- End of Notification Logic ---
 
         const populatedClass = await LiveClass.findById(newClass._id)
-            // CORRECTED: Populate from Users model
             .populate([{ path: 'mentor', model: Users, select: 'name' }, { path: 'batch', model: Batch1, select: 'batchName' }]);
 
         return NextResponse.json({ success: true, message: "Live class created and students notified!", data: populatedClass }, { status: 201 });
@@ -128,7 +130,6 @@ export async function POST(req) {
 }
 
 
-// PUT and DELETE methods are updated
 export async function PUT(req) {
     try {
         const authResult = await verifyAdminOrMentor(req);
@@ -153,7 +154,6 @@ export async function PUT(req) {
             return NextResponse.json({ success: false, message: "You do not have permission to edit this class." }, { status: 403 });
         }
         const updatedClass = await LiveClass.findByIdAndUpdate(_id, updateData, { new: true })
-            // CORRECTED: Populate from Users model
             .populate([{ path: 'mentor', model: Users, select: 'name' }, { path: 'batch', model: Batch1, select: 'batchName' }]);
         return NextResponse.json({ success: true, message: "Live class updated successfully!", data: updatedClass });
     } catch (error) {

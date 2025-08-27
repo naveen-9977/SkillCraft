@@ -1,0 +1,82 @@
+/* app/admin/batches/Batches.css */
+.batch-card {
+  background-color: white;
+  color: #111827;
+  padding: 1.5rem;
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e5e7eb;
+}
+
+.batch-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+}
+
+.batch-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+.batch-card-header svg {
+    color: #9ca3af;
+}
+
+.batch-card-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  flex-grow: 1;
+}
+
+.batch-card-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.action-btn {
+  background: #f3f4f6;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.action-btn.edit-btn:hover {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.action-btn.delete-btn:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.batch-card-date {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-bottom: 1rem;
+  padding-left: 2.75rem; /* Align with title */
+}
+
+.batch-card-subjects {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+  color: #4b5563;
+}
+
+.batch-card-subjects span {
+  font-weight: 500;
+  color: #374151;
+}

@@ -2,13 +2,12 @@ import { NextResponse } from "next/server";
 import ConnectToDB from "@/DB/ConnectToDB";
 import Announcement from "@/schema/Announcement";
 import Users from "@/schema/Users";
-import Batch1 from "@/schema/Batch1"; // Import Batch1 schema
+import Batch1 from "@/schema/Batch1";
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import mongoose from "mongoose";
 import Notification from "@/schema/Notification";
 
-// UPDATED: This function now returns the full user object for detailed checks
 async function verifyAdminOrMentor(req) {
   try {
     const cookieStore = cookies();
@@ -28,7 +27,6 @@ async function verifyAdminOrMentor(req) {
   }
 }
 
-// POST method to create a new announcement
 export async function POST(req) {
   try {
     const authResult = await verifyAdminOrMentor(req);
@@ -72,7 +70,6 @@ export async function POST(req) {
   }
 }
 
-// GET method to fetch announcements based on role and batches
 export async function GET(req) {
     try {
       const authResult = await verifyAdminOrMentor(req);
@@ -80,40 +77,46 @@ export async function GET(req) {
   
       await ConnectToDB();
 
-      let query = {};
-      // UPDATED: If the user is a mentor, fetch all announcements from their assigned batches
-      if (authResult.user.role === 'mentor') {
-          if (authResult.user.batchCodes && authResult.user.batchCodes.length > 0) {
-              query.batchCode = { $in: authResult.user.batchCodes };
-          } else {
-              return NextResponse.json({ announcements: [] }, { status: 200 });
+      const { searchParams } = new URL(req.url);
+      const batchCode = searchParams.get('batchCode');
+
+      if (batchCode) {
+          if (authResult.user.role === 'mentor' && !authResult.user.batchCodes.includes(batchCode)) {
+              return NextResponse.json({ error: "You are not authorized to view announcements for this batch." }, { status: 403 });
           }
+          const announcements = await Announcement.find({ batchCode }).sort({ createdAt: -1 });
+          const batch = await Batch1.findOne({ batchCode }).select('batchName').lean();
+          const announcementsWithBatchNames = announcements.map(announcement => ({
+              ...announcement.toObject(),
+              batchName: batch ? batch.batchName : 'Unknown Batch'
+          }));
+          
+          const mentorsInBatch = await Users.find({
+            role: 'mentor',
+            status: 'approved',
+            batchCodes: batchCode
+          }).select('name _id').lean();
+
+          return NextResponse.json({ announcements: announcementsWithBatchNames, mentors: mentorsInBatch }, { status: 200 });
+
+      } else {
+          let batchQuery = {};
+          if (authResult.user.role === 'mentor') {
+              if (authResult.user.batchCodes && authResult.user.batchCodes.length > 0) {
+                  batchQuery.batchCode = { $in: authResult.user.batchCodes };
+              } else {
+                  return NextResponse.json({ batches: [] }, { status: 200 });
+              }
+          }
+          const batches = await Batch1.find(batchQuery).sort({ createdAt: -1 });
+          return NextResponse.json({ batches }, { status: 200 });
       }
-      
-      const announcements = await Announcement.find(query).sort({ createdAt: -1 });
-
-      // Fetch batch names
-      const batchCodes = announcements.map(announcement => announcement.batchCode);
-      const batches = await Batch1.find({ batchCode: { $in: batchCodes } }).select('batchCode batchName').lean();
-      const batchCodeToNameMap = batches.reduce((acc, batch) => {
-          acc[batch.batchCode] = batch.batchName;
-          return acc;
-      }, {});
-
-      // Add batchName to each announcement object
-      const announcementsWithBatchNames = announcements.map(announcement => ({
-          ...announcement.toObject(),
-          batchName: batchCodeToNameMap[announcement.batchCode] || 'Unknown Batch'
-      }));
-
-      return NextResponse.json({ announcements: announcementsWithBatchNames }, { status: 200 });
     } catch (error) {
-      console.error("Error fetching announcements:", error);
-      return NextResponse.json({ error: "Failed to fetch announcements" }, { status: 500 });
+      console.error("Error fetching announcements data:", error);
+      return NextResponse.json({ error: "Failed to fetch data" }, { status: 500 });
     }
 }
   
-// PUT method to update an announcement
 export async function PUT(req) {
     try {
       const authResult = await verifyAdminOrMentor(req);
@@ -144,7 +147,6 @@ export async function PUT(req) {
     }
 }
   
-// DELETE method to delete an announcement
 export async function DELETE(req) {
     try {
       const authResult = await verifyAdminOrMentor(req);

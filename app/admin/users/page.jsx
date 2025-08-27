@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { FiUsers, FiUserCheck, FiUserPlus, FiSearch, FiEdit, FiTrash2, FiSave, FiX, FiAlertTriangle } from 'react-icons/fi';
-import './AdminUserManagement.css'; // Using the new CSS file
+import './AdminUserManagement.css';
 
 export default function AdminUserManagementPage() {
   const [users, setUsers] = useState([]);
@@ -67,6 +67,14 @@ export default function AdminUserManagementPage() {
     setIsModalOpen(false);
     setEditingUser(null);
     setError('');
+  };
+
+  const handleBatchCodeChange = (batchCode) => {
+    setCurrentBatchCodes(prev =>
+      prev.includes(batchCode)
+        ? prev.filter(code => code !== batchCode)
+        : [...prev, batchCode]
+    );
   };
 
   const handleSaveUser = async (e) => {
@@ -281,18 +289,18 @@ export default function AdminUserManagementPage() {
                     <div className="form-group">
                         <label>Assigned Batches</label>
                         <div className="batch-select-container">
-                            <select 
-                                multiple 
-                                value={currentBatchCodes} 
-                                onChange={(e) => setCurrentBatchCodes(Array.from(e.target.selectedOptions, option => option.value))}
-                                className="batch-select"
-                            >
-                                {batches.map(batch => (
-                                    <option key={batch._id} value={batch.batchCode}>
-                                        {batch.batchName}
-                                    </option>
-                                ))}
-                            </select>
+                            {batches.map(batch => (
+                                <div key={batch._id} className="batch-checkbox-option">
+                                    <input
+                                        type="checkbox"
+                                        id={`batch-${batch._id}`}
+                                        value={batch.batchCode}
+                                        checked={currentBatchCodes.includes(batch.batchCode)}
+                                        onChange={() => handleBatchCodeChange(batch.batchCode)}
+                                    />
+                                    <label htmlFor={`batch-${batch._id}`}>{batch.batchName}</label>
+                                </div>
+                            ))}
                         </div>
                     </div>
                     <div className="modal-footer">

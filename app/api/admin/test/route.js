@@ -4,10 +4,9 @@ import Test from "@/schema/Tests";
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import Users from "@/schema/Users";
-import Batch1 from "@/schema/Batch1"; // Import Batch1 schema
+import Batch1 from "@/schema/Batch1";
 import Notification from "@/schema/Notification";
 
-// UPDATED: This function now returns the full user object for more detailed checks
 async function verifyAdminOrMentor(req) {
   try {
     const cookieStore = cookies();
@@ -19,20 +18,18 @@ async function verifyAdminOrMentor(req) {
 
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
     await ConnectToDB();
-    // Fetch the user's role and their assigned batchCodes
     const user = await Users.findById(decoded.userId).select('role batchCodes');
 
     if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
       return { success: false, error: 'Unauthorized access' };
     }
 
-    return { success: true, user }; // Return the full user object
+    return { success: true, user };
   } catch (error) {
     return { success: false, error: 'Invalid token' };
   }
 }
 
-// Create a new test
 export async function POST(req) {
   try {
     const authResult = await verifyAdminOrMentor(req);
@@ -46,7 +43,6 @@ export async function POST(req) {
       return NextResponse.json({ error: "Batch code is required for new tests" }, { status: 400 });
     }
 
-    // Permission Check: A mentor can only create a test for a batch they are assigned to.
     if (authResult.user.role === 'mentor' && !authResult.user.batchCodes.includes(testData.batchCode)) {
         return NextResponse.json({ error: "You do not have permission to create a test for this batch." }, { status: 403 });
     }
@@ -55,7 +51,7 @@ export async function POST(req) {
 
     const test = await Test.create({
         ...testData,
-        createdBy: authResult.user._id // Set the creator of the test
+        createdBy: authResult.user._id
     });
 
     if (test) {
@@ -89,7 +85,6 @@ export async function POST(req) {
   }
 }
 
-// Get tests (with role-based filtering by batch)
 export async function GET(req) {
   try {
     const authResult = await verifyAdminOrMentor(req);
@@ -99,40 +94,42 @@ export async function GET(req) {
 
     await ConnectToDB();
     
-    let query = {};
+    const { searchParams } = new URL(req.url);
+    const batchCode = searchParams.get('batchCode');
 
-    // UPDATED: If the user is a mentor, show all tests from their assigned batches
-    if (authResult.user.role === 'mentor') {
-        if (authResult.user.batchCodes && authResult.user.batchCodes.length > 0) {
-            query.batchCode = { $in: authResult.user.batchCodes };
-        } else {
-            // If mentor has no batches, return an empty array
-            return NextResponse.json({ tests: [] }, { status: 200 });
+    if (batchCode) {
+        // Return tests for a specific batch
+        if (authResult.user.role === 'mentor' && !authResult.user.batchCodes.includes(batchCode)) {
+            return NextResponse.json({ error: "You are not authorized to view tests for this batch." }, { status: 403 });
         }
+
+        const tests = await Test.find({ batchCode }).sort({ createdAt: -1 });
+        const batch = await Batch1.findOne({ batchCode }).select('batchName').lean();
+        const testsWithBatchNames = tests.map(test => ({
+            ...test.toObject(),
+            batchName: batch ? batch.batchName : 'Unknown Batch'
+        }));
+        return NextResponse.json({ tests: testsWithBatchNames }, { status: 200 });
+
+    } else {
+        // Return batches
+        let query = {};
+        if (authResult.user.role === 'mentor') {
+            if (authResult.user.batchCodes && authResult.user.batchCodes.length > 0) {
+                query.batchCode = { $in: authResult.user.batchCodes };
+            } else {
+                return NextResponse.json({ batches: [] }, { status: 200 });
+            }
+        }
+
+        const batches = await Batch1.find(query).sort({ createdAt: -1 });
+        return NextResponse.json({ batches }, { status: 200 });
     }
-    // Admins will have an empty query object, fetching all tests
 
-    const tests = await Test.find(query).sort({ createdAt: -1 });
-
-    // Fetch batch names
-    const batchCodes = tests.map(test => test.batchCode);
-    const batches = await Batch1.find({ batchCode: { $in: batchCodes } }).select('batchCode batchName').lean();
-    const batchCodeToNameMap = batches.reduce((acc, batch) => {
-        acc[batch.batchCode] = batch.batchName;
-        return acc;
-    }, {});
-    
-    // Add batchName to each test object
-    const testsWithBatchNames = tests.map(test => ({
-        ...test.toObject(),
-        batchName: batchCodeToNameMap[test.batchCode] || 'Unknown Batch'
-    }));
-
-    return NextResponse.json({ tests: testsWithBatchNames }, { status: 200 });
   } catch (error) {
-    console.error("Error fetching tests:", error);
+    console.error("Error fetching data:", error);
     return NextResponse.json(
-      { error: "Failed to fetch tests" },
+      { error: "Failed to fetch data" },
       { status: 500 }
     );
   }

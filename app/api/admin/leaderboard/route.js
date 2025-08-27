@@ -3,11 +3,12 @@ import ConnectToDB from "@/DB/ConnectToDB";
 import TestResult from "@/schema/TestResult";
 import Test from "@/schema/Tests";
 import Users from "@/schema/Users";
+import Batch1 from "@/schema/Batch1";
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import mongoose from "mongoose";
 
-// UPDATED: This function now returns the full user object for permission checks
+// This function will verify the user and get their assigned batch codes if they are a mentor
 async function verifyAdminOrMentor(req) {
   try {
     const cookieStore = cookies();
@@ -19,14 +20,13 @@ async function verifyAdminOrMentor(req) {
 
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
     await ConnectToDB();
-    const user = await Users.findById(decoded.userId).select('role');
+    const user = await Users.findById(decoded.userId).select('role batchCodes');
 
     if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
       return { success: false, error: 'Unauthorized access' };
     }
 
-    // Return the user's role and ID for more granular checks
-    return { success: true, user: { _id: decoded.userId, role: user.role } };
+    return { success: true, user: { _id: decoded.userId, role: user.role, batchCodes: user.batchCodes } };
   } catch (error) {
     return { success: false, error: 'Invalid token' };
   }
@@ -46,9 +46,10 @@ export async function GET(req) {
 
     const { searchParams } = new URL(req.url);
     const testId = searchParams.get('testId');
+    const batchCode = searchParams.get('batchCode');
 
     if (testId) {
-      // Logic for fetching scores for a specific test
+      // SCENARIO 3: Return leaderboard for a specific test
       if (!mongoose.Types.ObjectId.isValid(testId)) {
         return NextResponse.json({ error: "Invalid Test ID" }, { status: 400 });
       }
@@ -58,8 +59,7 @@ export async function GET(req) {
           return NextResponse.json({ error: "Test not found" }, { status: 404 });
       }
 
-      // Permission Check: Mentors can only view leaderboards for tests they created
-      if (authResult.user.role === 'mentor' && test.createdBy.toString() !== authResult.user._id) {
+      if (authResult.user.role === 'mentor' && !authResult.user.batchCodes.includes(test.batchCode)) {
           return NextResponse.json({ error: "You do not have permission to view this leaderboard." }, { status: 403 });
       }
 
@@ -70,28 +70,40 @@ export async function GET(req) {
 
       return NextResponse.json({ testResults }, { status: 200 });
 
+    } else if (batchCode) {
+        // SCENARIO 2: Return tests for a specific batch
+        if (authResult.user.role === 'mentor' && !authResult.user.batchCodes.includes(batchCode)) {
+            return NextResponse.json({ error: "You are not authorized to view tests for this batch." }, { status: 403 });
+        }
+
+        const tests = await Test.find({ batchCode: batchCode }).select('title description');
+
+        const testSummary = await Promise.all(tests.map(async (test) => {
+            const studentCount = await TestResult.countDocuments({ test: test._id });
+            return {
+              _id: test._id,
+              title: test.title,
+              description: test.description,
+              totalStudents: studentCount,
+            };
+        }));
+        return NextResponse.json({ testSummary }, { status: 200 });
+
     } else {
-      // Logic for fetching the list of all available leaderboards (tests)
+      // SCENARIO 1: Return list of batches
       let query = {};
       
-      // If the user is a mentor, only show tests created by them
       if (authResult.user.role === 'mentor') {
-          query.createdBy = authResult.user._id;
+          if (authResult.user.batchCodes && authResult.user.batchCodes.length > 0) {
+              query.batchCode = { $in: authResult.user.batchCodes };
+          } else {
+              return NextResponse.json({ batches: [] }, { status: 200 });
+          }
       }
 
-      const tests = await Test.find(query).select('title description');
-
-      const leaderboardSummary = await Promise.all(tests.map(async (test) => {
-        const studentCount = await TestResult.countDocuments({ test: test._id });
-        return {
-          _id: test._id,
-          title: test.title,
-          description: test.description,
-          totalStudents: studentCount,
-        };
-      }));
-
-      return NextResponse.json({ leaderboardSummary }, { status: 200 });
+      const batches = await Batch1.find(query).select('batchName batchCode');
+      // **IMPORTANT**: This now returns a `batches` property
+      return NextResponse.json({ batches }, { status: 200 });
     }
 
   } catch (error) {

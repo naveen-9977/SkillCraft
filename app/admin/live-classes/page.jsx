@@ -7,11 +7,11 @@ import '../styles/AdminLiveClasses.css';
 
 const AdminLiveClasses = () => {
     const [classes, setClasses] = useState([]);
-    const [batches, setBatches] = useState([]);
-    const [mentors, setMentors] = useState([]);
+    const [allBatches, setAllBatches] = useState([]);
+    const [allMentors, setAllMentors] = useState([]);
     const [user, setUser] = useState(null);
     const [formData, setFormData] = useState({
-        topic: '', description: '', mentor: '', batch: '',
+        topic: '', description: '', mentor: '', batch: [],
         startTime: '', classType: 'external', link: ''
     });
     const [editingClassId, setEditingClassId] = useState(null);
@@ -45,16 +45,14 @@ const AdminLiveClasses = () => {
             setUser(currentUser);
 
             setClasses(classesRes?.data?.data || []);
-            setBatches(batchesRes?.data?.batches || []);
+            setAllBatches(batchesRes?.data?.batches || []);
             
             const allUsers = usersRes?.data?.users || [];
+            const approvedMentors = allUsers.filter(user => user.role === 'mentor' && user.status === 'approved');
+            setAllMentors(approvedMentors);
             
             if (currentUser?.role === 'mentor') {
-                const loggedInMentor = allUsers.find(u => u._id === currentUser._id);
-                setMentors(loggedInMentor ? [loggedInMentor] : []);
-                setFormData(prevState => ({ ...prevState, mentor: loggedInMentor?._id || '' }));
-            } else if (currentUser?.role === 'admin') {
-                setMentors(allUsers.filter(user => user.role === 'mentor' && user.status === 'approved'));
+                setFormData(prevState => ({ ...prevState, mentor: currentUser._id }));
             }
 
         } catch (err) {
@@ -68,10 +66,26 @@ const AdminLiveClasses = () => {
         const { name, value } = e.target;
         setFormData(prevState => ({ ...prevState, [name]: value }));
     };
+    
+    const handleBatchSelection = (batchId) => {
+        setFormData(prevState => {
+            const newBatch = prevState.batch.includes(batchId)
+                ? prevState.batch.filter(id => id !== batchId)
+                : [...prevState.batch, batchId];
+            return { ...prevState, batch: newBatch };
+        });
+    };
 
     const resetForm = () => {
-        const initialMentorId = user?.role === 'mentor' && mentors.length > 0 ? mentors[0]._id : '';
-        setFormData({ topic: '', description: '', mentor: initialMentorId, batch: '', startTime: '', classType: 'external', link: '' });
+        setFormData({ 
+            topic: '', 
+            description: '', 
+            mentor: user?.role === 'mentor' ? user._id : '', 
+            batch: [],
+            startTime: '', 
+            classType: 'external', 
+            link: '' 
+        });
         setEditingClassId(null);
         setShowModal(false);
         setError('');
@@ -83,7 +97,7 @@ const AdminLiveClasses = () => {
             topic: cls.topic,
             description: cls.description,
             mentor: cls.mentor._id,
-            batch: cls.batch._id,
+            batch: Array.isArray(cls.batch) ? cls.batch.map(b => b._id) : [cls.batch._id],
             startTime: new Date(new Date(cls.startTime).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16),
             classType: cls.classType,
             link: cls.link || ''
@@ -111,11 +125,7 @@ const AdminLiveClasses = () => {
                 ? await axios.put(url, { ...formData, _id: editingClassId })
                 : await axios.post(url, formData);
 
-            if (editingClassId) {
-                setClasses(classes.map(c => c._id === editingClassId ? response.data.data : c));
-            } else {
-                setClasses([response.data.data, ...classes]);
-            }
+            await fetchInitialData();
             resetForm();
         } catch (err) {
             setError(err.response?.data?.message || 'Failed to save class.');
@@ -137,6 +147,20 @@ const AdminLiveClasses = () => {
         const matchesSearch = cls.topic.toLowerCase().includes(searchQuery.toLowerCase());
         return (activeTab === 'all' || status === activeTab) && matchesSearch;
     });
+    
+    const availableBatchesForForm = () => {
+        if (user?.role === 'admin') {
+            const selectedMentor = allMentors.find(m => m._id === formData.mentor);
+            if (selectedMentor) {
+                return allBatches.filter(b => selectedMentor.batchCodes.includes(b.batchCode));
+            }
+            return [];
+        }
+        if (user?.role === 'mentor') {
+            return allBatches.filter(b => user.batchCodes.includes(b.batchCode));
+        }
+        return [];
+    };
 
     if (isLoading) return <div className="loading-container"><div className="loader"></div></div>;
 
@@ -182,7 +206,7 @@ const AdminLiveClasses = () => {
                                 <p className="class-description">{cls.description}</p>
                                 <div className="class-meta">
                                     <div className="meta-item"><span>Mentor:</span> {cls.mentor?.name || 'N/A'}</div>
-                                    <div className="meta-item"><span>Batch:</span> {cls.batch?.batchName || 'N/A'}</div>
+                                    <div className="meta-item"><span>Batches:</span> {Array.isArray(cls.batch) ? cls.batch.map(b => b.batchName).join(', ') : (cls.batch?.batchName || 'N/A')}</div>
                                     <div className="meta-item"><FiCalendar /> {startDate.toLocaleDateString()}</div>
                                     <div className="meta-item"><FiClock /> {startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                                 </div>
@@ -220,47 +244,59 @@ const AdminLiveClasses = () => {
                         </div>
                         <form onSubmit={handleSubmit} className="modal-body">
                             {error && <div className="modal-error">{error}</div>}
-                            <div className="form-group">
-                                <label>Topic</label>
-                                <input type="text" name="topic" value={formData.topic} onChange={handleInputChange} required />
-                            </div>
-                            <div className="form-group">
-                                <label>Description</label>
-                                <textarea name="description" value={formData.description} onChange={handleInputChange} required rows="3"></textarea>
-                            </div>
+                            
                             <div className="form-grid">
+                                <div className="form-group span-2">
+                                    <label htmlFor="topic">Topic</label>
+                                    <input id="topic" type="text" name="topic" value={formData.topic} onChange={handleInputChange} required />
+                                </div>
+                                <div className="form-group span-2">
+                                    <label htmlFor="description">Description</label>
+                                    <textarea id="description" name="description" value={formData.description} onChange={handleInputChange} required rows="3"></textarea>
+                                </div>
                                 <div className="form-group">
-                                    <label>Mentor</label>
-                                    <select name="mentor" value={formData.mentor} onChange={handleInputChange} required disabled={user?.role === 'mentor'}>
+                                    <label htmlFor="mentor">Mentor</label>
+                                    <select id="mentor" name="mentor" value={formData.mentor} onChange={handleInputChange} required disabled={user?.role === 'mentor'}>
                                         <option value="">Select Mentor</option>
-                                        {mentors.map(m => <option key={m._id} value={m._id}>{m.name}</option>)}
+                                        {allMentors.map(m => <option key={m._id} value={m._id}>{m.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="form-group">
-                                    <label>Batch</label>
-                                    <select name="batch" value={formData.batch} onChange={handleInputChange} required>
-                                        <option value="">Select Batch</option>
-                                        {batches.map(b => <option key={b._id} value={b._id}>{b.batchName}</option>)}
-                                    </select>
+                                    <label>Batches</label>
+                                    <div className="multi-select-container">
+                                        {availableBatchesForForm().map(b => (
+                                            <div key={b._id} className="multi-select-option">
+                                                <input 
+                                                    type="checkbox"
+                                                    id={`batch-${b._id}`}
+                                                    value={b._id}
+                                                    checked={formData.batch.includes(b._id)}
+                                                    onChange={() => handleBatchSelection(b._id)}
+                                                />
+                                                <label htmlFor={`batch-${b._id}`}>{b.batchName}</label>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="form-group">
-                                <label>Start Time</label>
-                                <input type="datetime-local" name="startTime" value={formData.startTime} onChange={handleInputChange} required />
-                            </div>
-                            <div className="form-group">
-                                <label>Class Type</label>
-                                <div className="status-options">
-                                    <div onClick={() => setFormData({...formData, classType: 'external'})} className={`status-option ${formData.classType === 'external' ? 'active' : ''}`}>External Link</div>
-                                    <div onClick={() => setFormData({...formData, classType: 'webrtc'})} className={`status-option ${formData.classType === 'webrtc' ? 'active' : ''}`}>Self-Hosted</div>
-                                </div>
-                            </div>
-                            {formData.classType === 'external' && (
                                 <div className="form-group">
-                                    <label>Meeting Link</label>
-                                    <input type="url" name="link" value={formData.link} onChange={handleInputChange} placeholder="https://..." />
+                                    <label htmlFor="startTime">Start Time</label>
+                                    <input id="startTime" type="datetime-local" name="startTime" value={formData.startTime} onChange={handleInputChange} required />
                                 </div>
-                            )}
+                                <div className="form-group">
+                                    <label>Class Type</label>
+                                    <div className="status-options">
+                                        <div onClick={() => setFormData({...formData, classType: 'external'})} className={`status-option ${formData.classType === 'external' ? 'active' : ''}`}>External Link</div>
+                                        <div onClick={() => setFormData({...formData, classType: 'webrtc'})} className={`status-option ${formData.classType === 'webrtc' ? 'active' : ''}`}>Self-Hosted</div>
+                                    </div>
+                                </div>
+                                {formData.classType === 'external' && (
+                                    <div className="form-group span-2">
+                                        <label htmlFor="link">Meeting Link</label>
+                                        <input id="link" type="url" name="link" value={formData.link} onChange={handleInputChange} placeholder="https://..." />
+                                    </div>
+                                )}
+                            </div>
+                            
                             <div className="modal-footer">
                                 <button type="button" onClick={resetForm} className="cancel-btn"><FiX /> Cancel</button>
                                 <button type="submit" className="save-btn"><FiSave /> {editingClassId ? 'Update' : 'Create'}</button>

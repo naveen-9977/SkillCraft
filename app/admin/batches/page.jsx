@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import "./Batches.css"; // Import the new CSS file
 
 // Using SVG directly for icons
 const IconPlus = () => ( <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg> );
 const IconEdit = () => ( <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> );
 const IconDelete = () => ( <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg> );
+const IconFolder = () => ( <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"></path></svg> );
 
 export default function AdminBatchesPage() {
   const [batches, setBatches] = useState([]);
@@ -201,26 +203,23 @@ export default function AdminBatchesPage() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {batches.map((batch) => (
-                    <div key={batch._id} className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow flex flex-col">
-                        <div className="p-6 flex-grow flex flex-col">
-                            <div className="flex justify-between items-start">
-                                <h2 className="text-xl font-semibold text-gray-900">{batch.batchName}</h2>
-                                {user && user.role === 'admin' && (
-                                    <div className="flex gap-3">
-                                        <button onClick={() => handleEdit(batch)} className="text-gray-400 hover:text-indigo-600"><IconEdit /></button>
-                                        <button onClick={() => handleDelete(batch._id)} className="text-gray-400 hover:text-red-600"><IconDelete /></button>
-                                    </div>
-                                )}
-                            </div>
-                             {user && user.role === 'admin' && (
-                                <>
-                                    <p className="text-sm text-gray-500">Created: {batch.batchCreatedAt}</p>
-                                </>
+                    <div key={batch._id} className="batch-card">
+                        <div className="batch-card-header">
+                            <IconFolder />
+                            <h2 className="batch-card-title">{batch.batchName}</h2>
+                            {user && user.role === 'admin' && (
+                                <div className="batch-card-actions">
+                                    <button onClick={() => handleEdit(batch)} className="action-btn edit-btn"><IconEdit /></button>
+                                    <button onClick={() => handleDelete(batch._id)} className="action-btn delete-btn"><IconDelete /></button>
+                                </div>
                             )}
-                            <p className="mt-4 text-gray-700 flex-grow">
-                                <span className="font-medium">Subjects:</span> {batch.subjects}
-                            </p>
                         </div>
+                        {user && user.role === 'admin' && (
+                            <p className="batch-card-date">Created: {batch.batchCreatedAt}</p>
+                        )}
+                        <p className="batch-card-subjects">
+                            <span>Subjects:</span> {batch.subjects}
+                        </p>
                     </div>
                 ))}
                 </div>
