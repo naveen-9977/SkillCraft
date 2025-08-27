@@ -1,4 +1,3 @@
-// app/admin/layout.jsx
 "use client";
 
 import React, { useEffect, useState } from "react";
@@ -6,7 +5,7 @@ import Link from "next/link";
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import AdminPannel from "../components/AdminPannel";
-import NotificationIcon from "../components/NotificationIcon"; // Re-import if it was removed
+import NotificationIcon from "../components/NotificationIcon"; // Ensure this path is correct
 import './styles/AdminLayout.css';
 
 export default function RootLayout({ children }) {
@@ -21,11 +20,7 @@ export default function RootLayout({ children }) {
     const checkIsMobile = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      if (mobile) {
-        setSidebarOpen(false);
-      } else {
-        setSidebarOpen(true);
-      }
+      setSidebarOpen(!mobile);
     };
     
     checkIsMobile();
@@ -37,11 +32,12 @@ export default function RootLayout({ children }) {
   }, []);
 
   useEffect(() => {
-    const checkAdminAuth = async () => {
+    const checkAuth = async () => {
       try {
         const res = await fetch("/api/auth/user"); 
         const data = await res.json();
-        if (res.ok && data.user && data.user.isAdmin) {
+        
+        if (res.ok && data.success && data.user && (data.user.role === 'admin' || data.user.role === 'mentor')) {
           setUser(data.user); 
         } else {
           setUser(null);
@@ -55,10 +51,10 @@ export default function RootLayout({ children }) {
         setLoading(false);
       }
     };
-    checkAdminAuth();
-  }, []); 
+    checkAuth();
+  }, [router]); 
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <div className="admin-layout-loading-spinner-container">
         <div className="admin-layout-spinner"></div>
@@ -66,15 +62,20 @@ export default function RootLayout({ children }) {
     );
   }
 
-  if (!user) { 
-    return null; 
-  }
-
   return (
     <div className="admin-layout-wrapper">
-      {/* Fixed top header for admin panel */}
       <nav className="admin-layout-header">
-          {/* Re-instated: SkillCrafters logo and title link */}
+          {isMobile && (
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label="Toggle sidebar"
+              className="p-2 -ml-2 mr-2 rounded-md text-gray-700 hover:bg-gray-200"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+              </svg>
+            </button>
+          )}
           <Link href={"/"} className="admin-layout-logo-link">
             <span>
               <Image src="/logo.svg" alt="SkillCrafters Logo" width={30} height={30} className="admin-layout-logo-img" priority />
@@ -83,25 +84,17 @@ export default function RootLayout({ children }) {
           </Link>
           {user && (
             <div className="admin-layout-user-info">
-              {/* Re-instated: NotificationIcon */}
-              <NotificationIcon />
+              {/* UPDATED: Pass the user object to the NotificationIcon */}
+              <NotificationIcon user={user} />
               <div className="admin-layout-user-avatar">
                 <Link href="/profile">
                   {user.name.charAt(0).toUpperCase()}
                 </Link>
               </div>
-              {/* This is the only part removed: the Link displaying user.name */}
-              {/* <Link
-                href="/profile"
-                className="admin-layout-user-name-link"
-              >
-                {user.name}
-              </Link> */}
             </div>
           )}
       </nav>
 
-      {/* Sidebar component - passes the fetched user object */}
       <AdminPannel 
         isOpen={sidebarOpen} 
         setIsOpen={setSidebarOpen} 
@@ -109,7 +102,6 @@ export default function RootLayout({ children }) {
         user={user} 
       />
 
-      {/* Main content area */}
       <main className={`admin-layout-main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${isMobile ? 'mobile' : ''}`}>
         {children}
       </main>

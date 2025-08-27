@@ -3,6 +3,7 @@ import ConnectToDB from "@/DB/ConnectToDB";
 import Assignment from "@/schema/Assignment"; 
 import Submission from "@/schema/Submission"; 
 import Users from "@/schema/Users"; 
+import Batch1 from "@/schema/Batch1";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import fs from 'fs/promises'; 
@@ -10,205 +11,176 @@ import path from 'path';
 import mongoose from "mongoose";
 import Notification from "@/schema/Notification";
 
-// Utility function to verify admin
-async function verifyAdmin(req) {
+async function verifyAdminOrMentor(req) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('token');
-
-    if (!token) {
-      return { success: false, error: 'No token found' };
-    }
-
+    if (!token) return { success: false, error: 'No token found' };
+    
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
-    const user = await Users.findById(decoded.userId).select('-password');
+    await ConnectToDB();
+    const user = await Users.findById(decoded.userId).select('role batchCodes');
 
-    if (!user || !user.isAdmin) {
+    if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
       return { success: false, error: 'Unauthorized access' };
     }
-
     return { success: true, user };
   } catch (error) {
     return { success: false, error: 'Invalid token' };
   }
 }
 
-// POST method to create a new assignment with PDF upload
+// GET method to fetch batches and all assignment items
+export async function GET(req) {
+  try {
+    const authResult = await verifyAdminOrMentor(req);
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    }
+    await ConnectToDB();
+
+    let batchQuery = {};
+    if (authResult.user.role === 'mentor') {
+        if (authResult.user.batchCodes && authResult.user.batchCodes.length > 0) {
+            batchQuery.batchCode = { $in: authResult.user.batchCodes };
+        } else {
+            return NextResponse.json({ batches: [], assignments: [] }, { status: 200 });
+        }
+    }
+
+    const batches = await Batch1.find(batchQuery).sort({ batchName: 1 });
+    const assignments = await Assignment.find(batchQuery).populate('createdBy', 'name');
+
+    return NextResponse.json({ batches, assignments }, { status: 200 });
+  } catch (error) {
+    console.error("Error fetching assignments:", error);
+    return NextResponse.json({ error: "Failed to fetch assignments" }, { status: 500 });
+  }
+}
+
+// POST method to create a new folder or upload an assignment file
 export async function POST(req) {
   try {
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdminOrMentor(req);
     if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
 
     const formData = await req.formData();
+    const type = formData.get('type');
     const title = formData.get('title');
+    const parent = formData.get('parent') || null;
+    const batchCode = formData.get('batchCode');
     const description = formData.get('description');
     const deadline = formData.get('deadline');
-    const batchCode = formData.get('batchCode'); // Get batchCode
     const pdfFile = formData.get('pdfFile'); 
 
-    if (!title || !description || !deadline || !batchCode) { 
-      return NextResponse.json({ error: "Title, description, deadline, and batch code are required" }, { status: 400 });
+    if (!type || !title || !batchCode) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
-
-    let resourceUrl = '';
-    if (pdfFile && pdfFile.name) {
-      const uploadDir = path.join(process.cwd(), 'public', 'assignments');
-      await fs.mkdir(uploadDir, { recursive: true });
-
-      const uniqueFileName = `${Date.now()}-${pdfFile.name.replace(/\s/g, '_')}`;
-      const filePath = path.join(uploadDir, uniqueFileName);
-      const fileBuffer = Buffer.from(await pdfFile.arrayBuffer());
-
-      await fs.writeFile(filePath, fileBuffer);
-      resourceUrl = `/assignments/${uniqueFileName}`;
+    if (authResult.user.role === 'mentor' && !authResult.user.batchCodes.includes(batchCode)) {
+        return NextResponse.json({ error: "You do not have permission to add material to this batch." }, { status: 403 });
     }
 
     await ConnectToDB();
+    let newAssignment;
 
-    const newAssignment = await Assignment.create({
-      title,
-      description,
-      deadline: new Date(deadline),
-      resourceUrl, 
-      batchCode, // Save batchCode
-    });
-    
-    if (newAssignment) {
-      // Find all users in the specified batch
-      const usersInBatch = await Users.find({
-        batchCodes: newAssignment.batchCode,
-        isAdmin: false,
-      });
-
-      // Create a notification for each user
-      for (const user of usersInBatch) {
-        await Notification.create({
-          user: user._id,
-          message: `A new assignment "${newAssignment.title}" has been posted.`,
-          link: "/dashboard/assignments",
-          batchCode: newAssignment.batchCode,
-          type: "new_assignment",
+    if (type === 'folder') {
+        newAssignment = await Assignment.create({
+            title, type: 'folder', parent, batchCode, createdBy: authResult.user._id
         });
-      }
+    } else if (type === 'file') {
+        if (!pdfFile || !description || !deadline) {
+            return NextResponse.json({ error: "File, description, and deadline are required for assignments" }, { status: 400 });
+        }
+        const uploadDir = path.join(process.cwd(), 'public', 'assignments');
+        await fs.mkdir(uploadDir, { recursive: true });
+        const uniqueFileName = `${Date.now()}-${pdfFile.name.replace(/\s/g, '_')}`;
+        const filePath = path.join(uploadDir, uniqueFileName);
+        const fileBuffer = Buffer.from(await pdfFile.arrayBuffer());
+        await fs.writeFile(filePath, fileBuffer);
+        const resourceUrl = `/assignments/${uniqueFileName}`;
+
+        newAssignment = await Assignment.create({
+            title, description, deadline: new Date(deadline), resourceUrl, type: 'file', parent, batchCode, createdBy: authResult.user._id
+        });
+        
+        const usersInBatch = await Users.find({ batchCodes: batchCode, role: 'student', status: 'approved' });
+        for (const user of usersInBatch) {
+            await Notification.create({
+                user: user._id,
+                message: `New assignment posted: "${title}" in batch ${batchCode}.`,
+                link: "/dashboard/assignments",
+                batchCode: batchCode,
+                type: "new_assignment",
+            });
+        }
+    } else {
+        return NextResponse.json({ error: "Invalid type" }, { status: 400 });
     }
 
-    return NextResponse.json(
-      { message: "Assignment created successfully", assignment: newAssignment },
-      { status: 201 }
-    );
-
+    return NextResponse.json({ message: "Assignment created successfully", assignment: newAssignment }, { status: 201 });
   } catch (error) {
     console.error("Error creating assignment:", error);
-    if (error.code === 'ENOENT') {
-        return NextResponse.json(
-            { error: "Server error: Upload directory not found or accessible." },
-            { status: 500 }
-        );
-    }
-    return NextResponse.json(
-      { error: error.message || "Failed to create assignment" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to create assignment" }, { status: 500 });
   }
 }
 
-// GET method to fetch all assignments, including their submission counts
-export async function GET(req) {
-  try {
-    const authResult = await verifyAdmin(req);
-    if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
-    }
-
-    await ConnectToDB();
-
-    const { searchParams } = new URL(req.url);
-    const batchCodeFilter = searchParams.get('batchCode');
-
-    let query = {};
-    if (batchCodeFilter) {
-      query.batchCode = batchCodeFilter;
-    }
-
-    const assignments = await Assignment.find(query).sort({ createdAt: -1 });
-
-    const assignmentsWithCounts = await Promise.all(assignments.map(async (assignment) => {
-      const submissionCount = await Submission.countDocuments({ assignment: assignment._id });
-      return {
-        ...assignment.toObject(), 
-        submissionCount 
-      };
-    }));
-
-    return NextResponse.json({ assignments: assignmentsWithCounts }, { status: 200 });
-  } catch (error) {
-    console.error("Error fetching assignments:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch assignments" },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE method to delete an assignment (and its associated PDF and submissions)
+// DELETE method to remove a folder or file
 export async function DELETE(req) {
   try {
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdminOrMentor(req);
     if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
-
-    const { searchParams } = new URL(req.url);
-    const assignmentId = searchParams.get('id'); 
-
-    if (!assignmentId || !mongoose.Types.ObjectId.isValid(assignmentId)) {
-      return NextResponse.json({ error: "Assignment ID is required and must be valid" }, { status: 400 });
-    }
-
     await ConnectToDB();
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
 
-    const assignmentToDelete = await Assignment.findById(assignmentId);
-
-    // Delete associated submissions first
-    await Submission.deleteMany({ assignment: assignmentId });
-
-    const deletedAssignment = await Assignment.findByIdAndDelete(assignmentId);
-
-    if (!deletedAssignment) {
-      return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+        return NextResponse.json({ error: "ID is required" }, { status: 400 });
     }
 
-    if (assignmentToDelete && assignmentToDelete.resourceUrl) {
-      const filePath = path.join(process.cwd(), 'public', assignmentToDelete.resourceUrl);
-      try {
-        await fs.unlink(filePath); 
-        console.log(`Successfully deleted file: ${filePath}`);
-      } catch (fileError) {
-        console.warn(`Could not delete associated file ${filePath}:`, fileError.message);
-      }
+    const itemToDelete = await Assignment.findById(id);
+    if (!itemToDelete) {
+        return NextResponse.json({ error: "Item not found" }, { status: 404 });
     }
 
-    return NextResponse.json(
-      { message: "Assignment deleted successfully" },
-      { status: 200 }
-    );
+    if (authResult.user.role === 'mentor' && itemToDelete.createdBy.toString() !== authResult.user._id.toString()) {
+        return NextResponse.json({ error: "You do not have permission to delete this item." }, { status: 403 });
+    }
+    
+    const idsToDelete = [itemToDelete._id];
+    const filesToDelete = [];
 
+    if (itemToDelete.type === 'file' && itemToDelete.resourceUrl) {
+        filesToDelete.push(itemToDelete.resourceUrl);
+    } else if (itemToDelete.type === 'folder') {
+        const children = await Assignment.find({ parent: itemToDelete._id });
+        const queue = [...children];
+        while (queue.length > 0) {
+            const current = queue.shift();
+            idsToDelete.push(current._id);
+            if (current.type === 'file' && current.resourceUrl) {
+                filesToDelete.push(current.resourceUrl);
+            } else if (current.type === 'folder') {
+                const grandchildren = await Assignment.find({ parent: current._id });
+                queue.push(...grandchildren);
+            }
+        }
+    }
+
+    await Submission.deleteMany({ assignment: { $in: idsToDelete } });
+    await Assignment.deleteMany({ _id: { $in: idsToDelete } });
+
+    for (const resourceUrl of filesToDelete) {
+        const filePath = path.join(process.cwd(), 'public', resourceUrl);
+        try { await fs.unlink(filePath); } catch (e) { console.warn(`Could not delete file: ${e.message}`); }
+    }
+
+    return NextResponse.json({ message: "Item deleted successfully" }, { status: 200 });
   } catch (error) {
-    console.error("Error deleting assignment:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to delete assignment" },
-      { status: 500 }
-    );
+    console.error("Error deleting item:", error);
+    return NextResponse.json({ error: "Failed to delete item" }, { status: 500 });
   }
 }

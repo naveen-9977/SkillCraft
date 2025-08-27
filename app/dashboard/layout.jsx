@@ -1,13 +1,12 @@
-// app/dashboard/layout.jsx
 "use client";
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import Sidebar from "../components/Sidebar"; // This path is correct
-import NotificationIcon from "../components/NotificationIcon";
-import './styles/RootLayout.css'; // This path is correct
+import Sidebar from "../components/Sidebar";
+import NotificationIcon from "../components/NotificationIcon"; // Ensure this path is correct
+import './styles/RootLayout.css';
 
 export default function RootLayout({ children }) {
   const router = useRouter();
@@ -17,57 +16,39 @@ export default function RootLayout({ children }) {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
-    // Mobile detection
     const checkIsMobile = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      if (mobile) {
-        setSidebarOpen(false); // Close sidebar by default on mobile
-      } else {
-        setSidebarOpen(true); // Open sidebar by default on desktop
-      }
+      setSidebarOpen(!mobile);
     };
     
     checkIsMobile();
     window.addEventListener("resize", checkIsMobile);
-    
-    return () => {
-      window.removeEventListener("resize", checkIsMobile);
-    };
+    return () => window.removeEventListener("resize", checkIsMobile);
   }, []);
 
   useEffect(() => {
-    checkAuth();
-  }, []);
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/auth/user');
+        const data = await res.json();
 
-  const checkAuth = async () => {
-    try {
-      const res = await fetch('/api/auth/user');
-      const data = await res.json();
-
-      if (res.ok && data.user) {
-        if (data.user.isAdmin) {
-          router.replace('/admin');
-          return;
+        if (res.ok && data.success && data.user && data.user.role === 'student' && data.user.status === 'approved') {
+          setUser(data.user);
+        } else {
+          router.replace('/login');
         }
-        if (data.user.status !== 'approved' || !Array.isArray(data.user.batchCodes) || data.user.batchCodes.length === 0) {
-            console.log("User not approved or missing batch codes, redirecting to login.");
-            router.replace('/login');
-            return;
-        }
-        setUser(data.user);
-      } else {
+      } catch (error) {
+        console.error('Auth check failed:', error);
         router.replace('/login');
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Auth check failed:', error);
-      router.replace('/login');
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    checkAuth();
+  }, [router]);
 
-  if (loading) {
+  if (loading || !user) {
     return (
       <div className="layout-loading-spinner-container">
         <div className="layout-spinner"></div>
@@ -75,55 +56,35 @@ export default function RootLayout({ children }) {
     );
   }
 
-  if (!user || user.isAdmin || user.status !== 'approved' || !Array.isArray(user.batchCodes) || user.batchCodes.length === 0) {
-    return null;
-  }
-
   return (
     <div className="layout-wrapper">
-      {/* Fixed top header */}
       <nav className="layout-header">
+        {isMobile && (
+          <button onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Toggle sidebar" className="p-2 -ml-2 mr-2 rounded-md text-gray-700 hover:bg-gray-200">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+          </button>
+        )}
         <Link href={"/"} className="layout-logo-link">
           <span>
-            <Image
-              src="/logo.svg"
-              alt="SkillCrafters Logo"
-              width={30}
-              height={30}
-              className="layout-logo-img"
-              priority
-            />
+            <Image src="/logo.svg" alt="SkillCrafters Logo" width={30} height={30} className="layout-logo-img" priority />
           </span>{" "}
           <h1 className="layout-app-title">SkillCrafters</h1>
         </Link>
         {user && (
           <div className="layout-user-info">
-            <NotificationIcon />
+            {/* UPDATED: Pass the user object to the NotificationIcon */}
+            <NotificationIcon user={user} />
             <div className="layout-user-avatar">
-              <Link href="/profile">
-                {user.name.charAt(0).toUpperCase()}
-              </Link>
+              <Link href="/profile">{user.name.charAt(0).toUpperCase()}</Link>
             </div>
-            {/* Removed the Link displaying user.name from the header */}
-            {/* <Link
-              href="/profile"
-              className="layout-user-name-link"
-            >
-              {user.name}
-            </Link> */}
           </div>
         )}
       </nav>
 
-      {/* Sidebar - now positioned fixed and starts below header */}
-      <Sidebar 
-        isOpen={sidebarOpen} 
-        setIsOpen={setSidebarOpen}
-        isMobile={isMobile}
-        user={user} /* Pass the user object to the Sidebar component */
-      />
+      <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} isMobile={isMobile} user={user} />
 
-      {/* Main content area - now handles margin/padding for fixed elements */}
       <main className={`layout-main-content ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${isMobile ? 'mobile' : ''}`}>
         {children}
       </main>

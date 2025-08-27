@@ -17,10 +17,16 @@ const announcementSchema = new mongoose.Schema({
     required: [true, "Announcement message is required"],
     trim: true,
   },
-  batchCode: { // NEW: Link to a batch
+  batchCode: {
     type: String,
     required: [true, "Batch code is required for announcements"],
     trim: true,
+  },
+  // NEW: Add a field to track the creator
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Users', // Reference to the Users model
+    required: true,
   },
   createdAt: {
     type: Date,

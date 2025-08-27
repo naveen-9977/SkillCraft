@@ -1,4 +1,3 @@
-// lib/dbConnect.js
 import mongoose from 'mongoose';
 
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -22,10 +21,12 @@ if (!cached) {
 
 async function dbConnect() {
   if (cached.conn) {
+    // If we have a connection, return it
     return cached.conn;
   }
 
   if (!cached.promise) {
+    // If there's no promise, create a new one
     const opts = {
       bufferCommands: false,
     };
@@ -34,7 +35,16 @@ async function dbConnect() {
       return mongoose;
     });
   }
-  cached.conn = await cached.promise;
+  
+  try {
+    // Await the promise to get the connection
+    cached.conn = await cached.promise;
+  } catch (e) {
+    // If the promise fails, clear it so we can try again
+    cached.promise = null;
+    throw e;
+  }
+
   return cached.conn;
 }
 

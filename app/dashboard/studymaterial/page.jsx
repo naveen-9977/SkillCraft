@@ -1,110 +1,137 @@
 "use client";
 
-import Link from "next/link";
-import React, { useEffect, useState } from "react";
-// NEW: Import icons from lucide-react
-import { FileText, Video, Link as LinkIcon, File, HelpCircle } from "lucide-react"; 
+import React, { useEffect, useState, useMemo } from "react";
+import { Folder, File, ArrowLeft, Video, Image as ImageIcon } from 'lucide-react';
 
-export default function StudyMaterialsPage() {
-  const [studyMaterials, setStudyMaterials] = useState([]);
+export default function StudentStudyMaterialsPage() {
+  const [batches, setBatches] = useState([]);
+  const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
+  
+  // Navigation state
+  const [currentBatch, setCurrentBatch] = useState(null);
+  const [currentFolderId, setCurrentFolderId] = useState(null);
+  const [breadcrumbs, setBreadcrumbs] = useState([]);
 
   useEffect(() => {
-    fetchStudyMaterials();
+    fetchData();
   }, []);
 
-  const fetchStudyMaterials = async () => {
+  const fetchData = async () => {
     setLoading(true);
-    setError("");
+    setError('');
     try {
-      // Fetch study materials for the current user's batch code
-      const res = await fetch("/api/studymaterial");
+      const res = await fetch("/api/studymaterial"); // Student-specific API
       const data = await res.json();
-
       if (res.ok) {
-        setStudyMaterials(data.studyMaterials);
+        setBatches(data.batches);
+        setMaterials(data.materials);
       } else {
-        setError(data.error || "Failed to fetch study materials.");
+        setError(data.error || "Failed to fetch your study materials.");
       }
     } catch (err) {
-      console.error("Error fetching study materials:", err);
-      setError("An error occurred while loading study materials.");
+      setError("An error occurred while loading your materials.");
     } finally {
       setLoading(false);
     }
   };
 
-  // NEW: Helper function to get the appropriate icon component
-  const getResourceIcon = (resourceType) => {
-    switch (resourceType) {
-      case 'pdf':
-        return <FileText size={48} className="text-red-500" />; // Example: Red for PDF
-      case 'video':
-        return <Video size={48} className="text-blue-500" />; // Example: Blue for Video
-      case 'link':
-        return <LinkIcon size={48} className="text-green-500" />; // Example: Green for Link
-      case 'document':
-        return <File size={48} className="text-purple-500" />; // Example: Purple for Document
-      case 'other':
-      default:
-        return <HelpCircle size={48} className="text-gray-500" />; // Default for 'other' or unknown
+  const getFileExtension = (url) => {
+    if (!url) return null;
+    try {
+        const urlParts = new URL(url, window.location.origin).pathname.split('.');
+        return urlParts.length > 1 ? urlParts.pop().toUpperCase() : null;
+    } catch (e) {
+        return null;
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  const FileTypeIcon = ({ url }) => {
+    const extension = getFileExtension(url);
+    switch (extension) {
+        case 'MP4': case 'MOV': return <Video className="w-16 h-16 text-red-400" />;
+        case 'JPG': case 'JPEG': case 'PNG': case 'GIF': return <ImageIcon className="w-16 h-16 text-green-400" />;
+        case 'PDF': return <File className="w-16 h-16 text-purple-400" />;
+        default: return <File className="w-16 h-16 text-gray-400" />;
+    }
+  };
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50">
-        <div className="text-red-600 mb-4">{error}</div>
-        <button
-          onClick={fetchStudyMaterials}
-          className="text-primary hover:underline mt-4"
-        >
-          Try Again
-        </button>
-      </div>
-    );
-  }
+  const { currentItems, currentPathName } = useMemo(() => {
+    if (!currentBatch) {
+      return { currentItems: batches, currentPathName: 'Your Batches' };
+    }
+    const items = materials.filter(m => m.batchCode === currentBatch.batchCode && m.parent === currentFolderId);
+    const currentFolder = currentFolderId ? materials.find(m => m._id === currentFolderId) : null;
+    return {
+        currentItems: items.sort((a, b) => a.type === 'folder' ? -1 : 1),
+        currentPathName: currentFolder ? currentFolder.title : currentBatch.batchName
+    };
+  }, [currentBatch, currentFolderId, batches, materials]);
+
+  const handleBatchClick = (batch) => {
+    setCurrentBatch(batch);
+    setCurrentFolderId(null);
+    setBreadcrumbs([{ id: null, name: batch.batchName }]);
+  };
+
+  const handleFolderClick = (folder) => {
+    setCurrentFolderId(folder._id);
+    setBreadcrumbs(prev => [...prev, { id: folder._id, name: folder.title }]);
+  };
+
+  const handleBreadcrumbClick = (index) => {
+    if (index === -1) {
+        setCurrentBatch(null);
+        setCurrentFolderId(null);
+        setBreadcrumbs([]);
+    } else {
+        const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
+        setBreadcrumbs(newBreadcrumbs);
+        setCurrentFolderId(newBreadcrumbs[newBreadcrumbs.length - 1].id);
+    }
+  };
+  
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading your materials...</div>;
+  if (error) return <div className="min-h-screen flex items-center justify-center text-red-500">{error}</div>;
 
   return (
-    <div className="bg-zinc-50 h-screen py-10 px-4 lg:px-10">
-      <div className="mb-6">
-        <h1 className="text-xl">Study Material</h1>
+    <div className="bg-zinc-50 min-h-screen p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto">
+        <header className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">Study Material</h1>
+           <div className="text-sm text-gray-500 breadcrumbs mt-2">
+                <span onClick={() => handleBreadcrumbClick(-1)} className="cursor-pointer hover:underline">Batches</span>
+                {breadcrumbs.map((crumb, index) => (
+                    <span key={index}>
+                        <span className="mx-2">/</span>
+                        <span onClick={() => handleBreadcrumbClick(index)} className="cursor-pointer hover:underline">{crumb.name}</span>
+                    </span>
+                ))}
+            </div>
+        </header>
+
+        <main className="bg-white p-4 rounded-xl shadow-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {currentItems.map(item => (
+              <div 
+                key={item._id} 
+                className="flex flex-col items-center justify-center p-4 border rounded-lg aspect-square cursor-pointer hover:bg-gray-50"
+                onClick={() => item.type === 'folder' || !currentBatch ? (item.batchName ? handleBatchClick(item) : handleFolderClick(item)) : window.open(item.resourceUrl, '_blank')}
+              >
+                {item.type === 'folder' || !currentBatch ? <Folder className="w-16 h-16 text-blue-400" /> : <FileTypeIcon url={item.resourceUrl} />}
+                <span className="text-center text-sm mt-2 break-all">{item.batchName || item.title}</span>
+                {item.type === 'file' && <span className="text-xs text-gray-400">{getFileExtension(item.resourceUrl)}</span>}
+              </div>
+            ))}
+          </div>
+           {currentItems.length === 0 && (
+            <div className="text-center py-16 text-gray-500">
+                This folder is empty.
+            </div>
+          )}
+        </main>
       </div>
-      {studyMaterials.length === 0 ? (
-        <div className="text-center text-gray-500 mt-8">
-          No study materials available for your batch at the moment.
-        </div>
-      ) : (
-        studyMaterials.map((item, index) => (
-          <Link
-            href={item.resourceUrl}
-            target="_blank"
-            className="mt-2 py-4 bg-white px-4 border-[1px] border-zinc-200 rounded flex items-center gap-8"
-            key={index}
-          >
-            <div className="hidden md:flex items-center">
-              {/* OLD: <img src="/pdf-ico.svg" alt="" className="size-12" /> */}
-              {/* NEW: Dynamically render icon based on resourceType */}
-              {getResourceIcon(item.resourceType)}
-            </div>
-            <div className="">
-              <h4 className="text-base font-medium">{item.title}</h4>
-              <p className="text-zinc-500 text-sm mt-1">by {item.mentor}</p>
-              <p className="text-zinc-500 text-xs mt-1">Type: {item.resourceType}</p>
-              <p className="text-zinc-500 text-xs mt-1">Batch: {item.batchCode}</p>
-            </div>
-          </Link>
-        ))
-      )}
     </div>
   );
 }

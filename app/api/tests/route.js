@@ -2,59 +2,50 @@ import { NextResponse } from "next/server";
 import ConnectToDB from "@/DB/ConnectToDB";
 import Test from "@/schema/Tests";
 import Users from "@/schema/Users";
+import Batch1 from "@/schema/Batch1";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
-// Utility function to verify user and get their batch codes
-async function verifyUserAndGetBatchCodes(req) {
+// Securely verifies the user is an approved student and returns their batch codes
+async function verifyStudentAndGetBatchCodes(req) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('token');
 
     if (!token) {
-      return { success: false, error: 'No token found', status: 401 };
+      return { success: false, error: 'Not authenticated', status: 401 };
     }
 
-    let decoded;
-    try {
-      decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
-    } catch (jwtError) {
-      console.error("JWT verification failed:", jwtError);
-      return { success: false, error: 'Invalid token', status: 401 };
-    }
-
+    const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
     if (!decoded.userId || !mongoose.Types.ObjectId.isValid(decoded.userId)) {
-      console.error("Invalid userId format in token:", decoded.userId);
-      return { success: false, error: 'Invalid user ID format in token', status: 401 };
+      return { success: false, error: 'Invalid user token', status: 401 };
     }
 
     await ConnectToDB(); 
 
-    // Select batchCodes (plural)
-    const user = await Users.findById(decoded.userId).select('batchCodes status'); 
+    const user = await Users.findById(decoded.userId).select('role batchCodes status'); 
 
     if (!user) {
       return { success: false, error: 'User not found', status: 404 };
     }
 
-    // Check if user is approved and has at least one batch code
-    if (user.status !== 'approved' || !Array.isArray(user.batchCodes) || user.batchCodes.length === 0) {
-      return { success: false, error: 'User not approved or not assigned to any batch. Please contact your administrator.', status: 403 };
+    // Security Check: Ensure user is a student, is approved, and is in a batch.
+    if (user.role !== 'student' || user.status !== 'approved' || !Array.isArray(user.batchCodes) || user.batchCodes.length === 0) {
+      return { success: false, error: 'Access denied. Please contact your administrator.', status: 403 };
     }
 
-    // Return batchCodes array
     return { success: true, userBatchCodes: user.batchCodes };
   } catch (error) {
-    console.error("Detailed Authentication Failed Error in verifyUserAndGetBatchCodes (tests API):", error);
+    console.error("Authentication Error in tests API:", error);
     return { success: false, error: `Authentication failed: ${error.message || 'Unknown error'}`, status: 500 };
   }
 }
 
-// Get all tests (for students)
+// GET method to fetch tests for the student's batches
 export async function GET(req) {
   try {
-    const authResult = await verifyUserAndGetBatchCodes(req);
+    const authResult = await verifyStudentAndGetBatchCodes(req);
     if (!authResult.success) {
       return NextResponse.json(
         { error: authResult.error },
@@ -64,14 +55,30 @@ export async function GET(req) {
 
     await ConnectToDB();
 
-    const studentBatchCodes = authResult.userBatchCodes; // Get array of batch codes
+    const studentBatchCodes = authResult.userBatchCodes;
 
-    // Filter tests by ANY of the authenticated student's batch codes
-    const tests = await Test.find({ batchCode: { $in: studentBatchCodes } })
+    // Fetch only the tests where the batchCode is in the student's list of assigned batch codes
+    const tests = await Test.find({ 
+        batchCode: { $in: studentBatchCodes },
+        isActive: true 
+      })
       .sort({ createdAt: -1 })
-      .select('-questions.correctOption -__v'); 
+      .select('-questions.correctOption -__v'); // Do not send correct answers to the student
 
-    return NextResponse.json({ tests }, { status: 200 });
+    // Fetch the full batch documents to get the names
+    const batches = await Batch1.find({ batchCode: { $in: studentBatchCodes } }).select('batchCode batchName').lean();
+    const batchCodeToNameMap = batches.reduce((acc, batch) => {
+        acc[batch.batchCode] = batch.batchName;
+        return acc;
+    }, {});
+
+    // Add batchName to each test object
+    const testsWithBatchNames = tests.map(test => ({
+        ...test.toObject(), // Convert mongoose doc to plain object
+        batchName: batchCodeToNameMap[test.batchCode] || 'Unknown Batch'
+    }));
+
+    return NextResponse.json({ tests: testsWithBatchNames }, { status: 200 });
   } catch (error) {
     console.error("Error fetching tests:", error);
     return NextResponse.json(

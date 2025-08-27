@@ -1,252 +1,190 @@
 import { NextResponse } from "next/server";
 import ConnectToDB from "@/DB/ConnectToDB";
 import LiveClass from "@/schema/LiveClass";
-import Users from "@/schema/Users";
+import Joi from "joi";
+import Users from "@/schema/Users"; // CORRECTED: Use Users model for population
+import Batch1 from "@/schema/Batch1";
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
-import mongoose from "mongoose";
+import Notification from "@/schema/Notification"; // Import the Notification schema
 
-// Utility function to verify admin
-async function verifyAdmin(req) {
+// This function remains the same
+async function verifyAdminOrMentor(req) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('token');
-
-    if (!token) {
-      return { success: false, error: 'No token found', status: 401 };
-    }
-
-    let decoded;
-    try {
-      decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
-    } catch (error) {
-      console.error("JWT verification failed in verifyAdmin:", error);
-      if (error.name === 'TokenExpiredError') {
-        return { success: false, error: 'Session expired. Please log in again.', status: 401 };
-      }
-      return { success: false, error: 'Invalid token', status: 401 };
-    }
-
-    if (!decoded.userId || !mongoose.Types.ObjectId.isValid(decoded.userId)) {
-      console.error("Invalid userId format in token for admin:", decoded.userId);
-      return { success: false, error: 'Invalid user ID format in token', status: 401 };
-    }
-
+    if (!token) return { success: false, error: 'No token found' };
+    const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
     await ConnectToDB();
-    const user = await Users.findById(decoded.userId).select('isAdmin');
-
-    if (!user || !user.isAdmin) {
-      return { success: false, error: 'Unauthorized access: Not an administrator', status: 403 };
+    const user = await Users.findById(decoded.userId).select('role batchCodes');
+    if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
+      return { success: false, error: 'Unauthorized access' };
     }
-
     return { success: true, user };
   } catch (error) {
-    console.error("Detailed Authentication Failed Error in verifyAdmin (Live Classes API):", error);
-    return { success: false, error: `Authentication failed: ${error.message || 'Unknown error'}`, status: 500 };
+    return { success: false, error: 'Invalid token' };
   }
 }
 
-// Helper function to calculate class status
-const calculateClassStatus = (liveClass) => {
-  const now = new Date();
-  const start = new Date(liveClass.startTime);
-  const end = new Date(liveClass.endTime);
+const schema = Joi.object({
+    _id: Joi.string().optional(),
+    topic: Joi.string().required(),
+    description: Joi.string().required(),
+    mentor: Joi.string().required(),
+    batch: Joi.string().required(),
+    startTime: Joi.date().required(),
+    classType: Joi.string().valid('webrtc', 'external').required(),
+    link: Joi.when('classType', {
+        is: 'external',
+        then: Joi.string().uri().required(),
+        otherwise: Joi.string().allow('').optional()
+    }),
+}).unknown(true);
 
-  if (!liveClass.isActive) {
-    return 'Inactive';
-  }
-  if (now >= start && now <= end) {
-    return 'Live Now';
-  }
-  if (now < start) {
-    return 'Upcoming';
-  }
-  if (now > end) {
-    return 'Ended';
-  }
-  return 'Unknown';
-};
-
-// POST method to create a new live class
-export async function POST(req) {
-  try {
-    const authResult = await verifyAdmin(req);
-    if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: authResult.status }
-      );
-    }
-
-    const { title, description, classLink, mentor, startTime, endTime, batchCodes, isActive } = await req.json();
-
-    if (!title || !description || !classLink || !mentor || !startTime || !endTime || !batchCodes || batchCodes.length === 0) {
-      return NextResponse.json({ error: "All fields are required, and at least one batch code must be selected." }, { status: 400 });
-    }
-
-    const start = new Date(startTime);
-    const end = new Date(endTime);
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      return NextResponse.json({ error: "Invalid start or end time format." }, { status: 400 });
-    }
-    if (start >= end) {
-      return NextResponse.json({ error: "Start time must be before end time." }, { status: 400 });
-    }
-
-    await ConnectToDB();
-
-    const newLiveClass = await LiveClass.create({
-      title,
-      description,
-      classLink,
-      mentor,
-      startTime: start,
-      endTime: end,
-      batchCodes,
-      isActive: isActive !== undefined ? isActive : true,
-    });
-
-    return NextResponse.json(
-      { message: "Live class created successfully", liveClass: newLiveClass },
-      { status: 201 }
-    );
-  } catch (error) {
-    console.error("Error creating live class:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to create live class" },
-      { status: 500 }
-    );
-  }
-}
-
-// GET method to fetch all live classes (admin view)
+// GET method is updated
 export async function GET(req) {
-  try {
-    const authResult = await verifyAdmin(req);
-    if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: authResult.status }
-      );
+    try {
+        const authResult = await verifyAdminOrMentor(req);
+        if (!authResult.success) {
+            return NextResponse.json({ error: authResult.error }, { status: 401 });
+        }
+        await ConnectToDB();
+        let batchQuery = {};
+        if (authResult.user.role === 'mentor') {
+            if (authResult.user.batchCodes && authResult.user.batchCodes.length > 0) {
+                const mentorBatches = await Batch1.find({ batchCode: { $in: authResult.user.batchCodes } }).select('_id');
+                const mentorBatchIds = mentorBatches.map(b => b._id);
+                batchQuery = { batch: { $in: mentorBatchIds } };
+            } else {
+                return NextResponse.json({ success: true, data: [] });
+            }
+        }
+        const classes = await LiveClass.find(batchQuery)
+            // CORRECTED: Populate from Users model
+            .populate([{ path: 'mentor', model: Users, select: 'name' }, { path: 'batch', model: Batch1, select: 'batchName' }])
+            .sort({ startTime: -1 });
+        return NextResponse.json({ success: true, data: classes });
+    } catch (error) {
+        console.error("Error fetching live classes:", error);
+        return NextResponse.json({ success: false, message: "Something went wrong!" }, { status: 500 });
     }
-
-    await ConnectToDB();
-
-    const { searchParams } = new URL(req.url);
-    const batchCodeFilter = searchParams.get('batchCode');
-
-    let query = {};
-    if (batchCodeFilter) {
-      query.batchCodes = batchCodeFilter;
-    }
-
-    const liveClasses = await LiveClass.find(query).sort({ startTime: -1 });
-
-    // NEW: Map over liveClasses to add calculatedStatus
-    const liveClassesWithStatus = liveClasses.map(cls => ({
-      ...cls.toObject(),
-      calculatedStatus: calculateClassStatus(cls)
-    }));
-
-    return NextResponse.json({ liveClasses: liveClassesWithStatus }, { status: 200 });
-  } catch (error) {
-    console.error("Error fetching live classes:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch live classes" },
-      { status: 500 }
-    );
-  }
 }
 
-// PUT method to update a live class
+// POST method is updated
+export async function POST(req) {
+    try {
+        const authResult = await verifyAdminOrMentor(req);
+        if (!authResult.success) {
+            return NextResponse.json({ error: authResult.error }, { status: 401 });
+        }
+
+        await ConnectToDB();
+        const body = await req.json();
+        const { error } = schema.validate(body);
+        if (error) {
+            return NextResponse.json({ success: false, message: error.details[0].message }, { status: 400 });
+        }
+        
+        const targetBatchDoc = await Batch1.findById(body.batch);
+        if (!targetBatchDoc) {
+            return NextResponse.json({ success: false, message: "Target batch not found." }, { status: 404 });
+        }
+
+        if (authResult.user.role === 'mentor' && !authResult.user.batchCodes.includes(targetBatchDoc.batchCode)) {
+            return NextResponse.json({ success: false, message: "You are not assigned to this batch." }, { status: 403 });
+        }
+
+        const newClass = await LiveClass.create({ ...body, createdBy: authResult.user._id });
+        
+        // --- Notification Logic ---
+        if (newClass) {
+            const usersToNotify = await Users.find({
+                role: 'student',
+                status: 'approved',
+                batchCodes: targetBatchDoc.batchCode
+            });
+
+            for (const student of usersToNotify) {
+                await Notification.create({
+                    user: student._id,
+                    message: `A new live class "${newClass.topic}" has been scheduled for your batch.`,
+                    link: "/dashboard/live-classes",
+                    batchCode: targetBatchDoc.batchCode,
+                    type: "new_announcement"
+                });
+            }
+        }
+        // --- End of Notification Logic ---
+
+        const populatedClass = await LiveClass.findById(newClass._id)
+            // CORRECTED: Populate from Users model
+            .populate([{ path: 'mentor', model: Users, select: 'name' }, { path: 'batch', model: Batch1, select: 'batchName' }]);
+
+        return NextResponse.json({ success: true, message: "Live class created and students notified!", data: populatedClass }, { status: 201 });
+    } catch (error) {
+        console.error("Error creating live class:", error);
+        return NextResponse.json({ success: false, message: "Something went wrong!" }, { status: 500 });
+    }
+}
+
+
+// PUT and DELETE methods are updated
 export async function PUT(req) {
-  try {
-    const authResult = await verifyAdmin(req);
-    if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: authResult.status }
-      );
+    try {
+        const authResult = await verifyAdminOrMentor(req);
+        if (!authResult.success) {
+            return NextResponse.json({ error: authResult.error }, { status: 401 });
+        }
+        await ConnectToDB();
+        const body = await req.json();
+        const { _id, ...updateData } = body;
+        const { error } = schema.validate(body);
+        if (error) {
+            return NextResponse.json({ success: false, message: error.details[0].message }, { status: 400 });
+        }
+        if (!_id) {
+            return NextResponse.json({ success: false, message: "Class ID is required." }, { status: 400 });
+        }
+        const classToUpdate = await LiveClass.findById(_id);
+        if (!classToUpdate) {
+            return NextResponse.json({ success: false, message: "Class not found." }, { status: 404 });
+        }
+        if (authResult.user.role === 'mentor' && classToUpdate.createdBy.toString() !== authResult.user._id.toString()) {
+            return NextResponse.json({ success: false, message: "You do not have permission to edit this class." }, { status: 403 });
+        }
+        const updatedClass = await LiveClass.findByIdAndUpdate(_id, updateData, { new: true })
+            // CORRECTED: Populate from Users model
+            .populate([{ path: 'mentor', model: Users, select: 'name' }, { path: 'batch', model: Batch1, select: 'batchName' }]);
+        return NextResponse.json({ success: true, message: "Live class updated successfully!", data: updatedClass });
+    } catch (error) {
+        console.error("Error updating live class:", error);
+        return NextResponse.json({ success: false, message: "Something went wrong!" }, { status: 500 });
     }
-
-    const { _id, title, description, classLink, mentor, startTime, endTime, batchCodes, isActive } = await req.json();
-
-    if (!_id || !mongoose.Types.ObjectId.isValid(_id)) {
-      return NextResponse.json({ error: "Invalid Live Class ID" }, { status: 400 });
-    }
-    if (!title || !description || !classLink || !mentor || !startTime || !endTime || !batchCodes || batchCodes.length === 0) {
-        return NextResponse.json({ error: "All fields are required for update, and at least one batch code must be selected." }, { status: 400 });
-    }
-
-    const start = new Date(startTime);
-    const end = new Date(endTime);
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      return NextResponse.json({ error: "Invalid start or end time format." }, { status: 400 });
-    }
-    if (start >= end) {
-      return NextResponse.json({ error: "Start time must be before end time." }, { status: 400 });
-    }
-
-    await ConnectToDB();
-
-    const updatedLiveClass = await LiveClass.findByIdAndUpdate(
-      _id,
-      { title, description, classLink, mentor, startTime: start, endTime: end, batchCodes, isActive, updatedAt: new Date() },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedLiveClass) {
-      return NextResponse.json({ error: "Live class not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(
-      { message: "Live class updated successfully", liveClass: updatedLiveClass },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("Error updating live class:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to update live class" },
-      { status: 500 }
-    );
-  }
 }
 
-// DELETE method to delete a live class
 export async function DELETE(req) {
-  try {
-    const authResult = await verifyAdmin(req);
-    if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: authResult.status }
-      );
+    try {
+        const authResult = await verifyAdminOrMentor(req);
+        if (!authResult.success) {
+            return NextResponse.json({ error: authResult.error }, { status: 401 });
+        }
+        await ConnectToDB();
+        const { searchParams } = new URL(req.url);
+        const id = searchParams.get('id');
+        if (!id) {
+            return NextResponse.json({ success: false, message: "Class ID is required." }, { status: 400 });
+        }
+        const classToDelete = await LiveClass.findById(id);
+        if (!classToDelete) {
+            return NextResponse.json({ success: false, message: "Class not found." }, { status: 404 });
+        }
+        if (authResult.user.role === 'mentor' && classToDelete.createdBy.toString() !== authResult.user._id.toString()) {
+            return NextResponse.json({ success: false, message: "You do not have permission to delete this class." }, { status: 403 });
+        }
+        await LiveClass.findByIdAndDelete(id);
+        return NextResponse.json({ success: true, message: "Live class deleted successfully!" });
+    } catch (error) {
+        console.error("Error deleting live class:", error);
+        return NextResponse.json({ success: false, message: "Something went wrong!" }, { status: 500 });
     }
-
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
-
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ error: "Live Class ID is required and must be valid" }, { status: 400 });
-    }
-
-    await ConnectToDB();
-
-    const deletedLiveClass = await LiveClass.findByIdAndDelete(id);
-
-    if (!deletedLiveClass) {
-      return NextResponse.json({ error: "Live class not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(
-      { message: "Live class deleted successfully" },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("Error deleting live class:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to delete live class" },
-      { status: 500 }
-    );
-  }
 }

@@ -1,14 +1,13 @@
-// app/api/admin/notifications/route.js
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import ConnectToDB from "@/DB/ConnectToDB";
 import Notification from "@/schema/Notification";
 import Users from "@/schema/Users";
-import mongoose from "mongoose"; // NEW: Import mongoose for ObjectId validation
+import mongoose from "mongoose";
 
-// Utility function to verify admin
-async function verifyAdmin(req) {
+// This function now returns the full user object for detailed permission checks
+async function verifyAdminOrMentor(req) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('token');
@@ -17,40 +16,28 @@ async function verifyAdmin(req) {
       return { success: false, error: 'No token found', status: 401 };
     }
 
-    let decoded;
-    try {
-      decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
-    } catch (error) {
-      console.error("JWT verification failed in verifyAdmin:", error);
-      if (error.name === 'TokenExpiredError') {
-        return { success: false, error: 'Session expired. Please log in again.', status: 401 };
-      }
-      return { success: false, error: 'Invalid token', status: 401 };
-    }
-
+    const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
     if (!decoded.userId || !mongoose.Types.ObjectId.isValid(decoded.userId)) {
-      console.error("Invalid userId format in token for admin:", decoded.userId);
-      return { success: false, error: 'Invalid user ID format in token', status: 401 };
+      return { success: false, error: 'Invalid user ID in token', status: 401 };
     }
 
     await ConnectToDB();
-    const user = await Users.findById(decoded.userId).select('isAdmin');
+    const user = await Users.findById(decoded.userId).select('role batchCodes');
 
-    if (!user || !user.isAdmin) {
-      return { success: false, error: 'Unauthorized access: Not an administrator', status: 403 };
+    if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
+      return { success: false, error: 'Unauthorized access', status: 403 };
     }
 
     return { success: true, user };
   } catch (error) {
-    console.error("Detailed Authentication Failed Error in verifyAdmin (Admin Notifications API):", error);
     return { success: false, error: `Authentication failed: ${error.message || 'Unknown error'}`, status: 500 };
   }
 }
 
-// GET method to fetch all notifications for admin (super admin access)
+// GET method to fetch notifications based on user role
 export async function GET(req) {
   try {
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdminOrMentor(req);
     if (!authResult.success) {
       return NextResponse.json(
         { error: authResult.error },
@@ -58,24 +45,41 @@ export async function GET(req) {
       );
     }
 
+    const { user } = authResult;
     await ConnectToDB();
 
-    // Fetch all notifications. Admins (super admin) can see everything.
-    const notifications = await Notification.find({})
+    let query = {};
+
+    // UPDATED: Role-based notification filtering logic
+    if (user.role === 'admin') {
+      // Admins see notifications for new submissions, test results, and new user approvals
+      query = {
+        type: { $in: ['new_submission', 'new_test_result'] }
+      };
+    } else if (user.role === 'mentor') {
+      // Mentors only see notifications for submissions and test results in their assigned batches
+      if (user.batchCodes && user.batchCodes.length > 0) {
+        query = {
+          type: { $in: ['new_submission', 'new_test_result'] },
+          batchCode: { $in: user.batchCodes } // The key filter for mentors
+        };
+      } else {
+        // If a mentor has no batches, they have no relevant notifications
+        return NextResponse.json({ notifications: [] }, { status: 200 });
+      }
+    }
+
+    const notifications = await Notification.find(query)
       .sort({ createdAt: -1 })
-      .limit(50) // Limit to a reasonable number for display
-      .populate('user', 'name email'); // Populate user details if needed
+      .limit(20) // Limit to the last 20 relevant notifications
+      .populate('user', 'name email');
 
     return NextResponse.json({ notifications }, { status: 200 });
   } catch (error) {
-    console.error("Error fetching admin notifications:", error);
+    console.error("Error fetching admin/mentor notifications:", error);
     return NextResponse.json(
       { error: "Failed to fetch notifications" },
       { status: 500 }
     );
   }
 }
-
-// Optional: PUT method to mark all notifications as read for admin
-// You might want to implement a specific way for admins to manage notifications (e.g., mark individual as read)
-// For simplicity, this example just provides a GET for all notifications.

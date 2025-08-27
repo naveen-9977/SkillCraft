@@ -51,14 +51,20 @@ const testSchema = new mongoose.Schema({
       message: "Test must have at least one question"
     }
   },
-  deadline: { // Added deadline field
+  deadline: {
     type: Date,
     required: false
   },
-  batchCode: { // NEW: Added batchCode to associate tests with a batch
+  batchCode: {
     type: String,
     required: [true, "Batch code is required for tests"],
     trim: true,
+  },
+  // NEW: Add a field to track the creator
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Users', // Reference to the Users model
+    required: true,
   },
   isActive: {
     type: Boolean,

@@ -1,436 +1,276 @@
-"use client";
+'use client'
+import { useState, useEffect } from 'react';
+import axios from 'axios';
+import Link from 'next/link';
+import { FiPlus, FiVideo, FiEdit, FiTrash2, FiSearch, FiCalendar, FiClock, FiX, FiSave } from 'react-icons/fi';
+import '../styles/AdminLiveClasses.css';
 
-import React, { useEffect, useState } from "react";
-import { MdDelete, MdEdit, MdOutlineVideocam } from "react-icons/md";
-import { format } from 'date-fns';
-import { useRouter } from 'next/navigation';
-
-// Import the new CSS file
-import '../styles/AdminLiveClasses.css'; // Adjust the path as necessary, e.g., '../styles/AdminLiveClasses.css'
-
-export default function AdminLiveClassesPage() {
-  const [liveClasses, setLiveClasses] = useState([]);
-  const [batches, setBatches] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    classLink: '',
-    mentor: '',
-    startTime: '',
-    endTime: '',
-    batchCodes: [],
-    isActive: true,
-  });
-  const [editingClassId, setEditingClassId] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const router = useRouter();
-
-  useEffect(() => {
-    fetchLiveClassesAndBatches();
-  }, []);
-
-  const fetchLiveClassesAndBatches = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const classesRes = await fetch("/api/admin/live-classes");
-      const classesData = await classesRes.json();
-      if (classesRes.ok) {
-        setLiveClasses(classesData.liveClasses);
-      } else {
-        if (classesRes.status === 401) {
-          setError("Session expired. Please log in again.");
-          router.push('/login');
-        } else {
-          setError(classesData.error || "Failed to fetch live classes.");
-        }
-      }
-
-      const batchesRes = await fetch("/api/admin/batches");
-      const batchesData = await batchesRes.json();
-      if (batchesRes.ok) {
-        setBatches(batchesData.batches);
-      } else {
-        if (batchesRes.status === 401) {
-          setError(prev => prev + " Session expired. Please log in again.");
-          router.push('/login');
-        } else {
-          setError(prev => prev + (batchesData.error || " Failed to fetch batches."));
-        }
-      }
-
-    } catch (err) {
-      console.error("Error fetching live classes or batches:", err);
-      setError("An error occurred while loading data.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  };
-
-  const handleBatchCodeChange = (e) => {
-    const selectedOptions = Array.from(e.target.selectedOptions).map(option => option.value);
-    setFormData(prev => ({
-      ...prev,
-      batchCodes: selectedOptions
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setError('');
-
-    try {
-      const url = editingClassId
-        ? `/api/admin/live-classes`
-        : '/api/admin/live-classes';
-
-      const method = editingClassId ? 'PUT' : 'POST';
-
-      const dataToSend = { ...formData };
-      if (editingClassId) {
-        dataToSend._id = editingClassId;
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(dataToSend)
-      });
-
-      if (res.ok) {
-        setShowForm(false);
-        setFormData({
-          title: '',
-          description: '',
-          classLink: '',
-          mentor: '',
-          startTime: '',
-          endTime: '',
-          batchCodes: [],
-          isActive: true,
-        });
-        setEditingClassId(null);
-        fetchLiveClassesAndBatches();
-      } else {
-        const data = await res.json();
-        if (res.status === 401) {
-          setError("Session expired. Please log in again.");
-          router.push('/login');
-        } else {
-          setError(data.error || 'Failed to save live class.');
-        }
-      }
-    } catch (err) {
-      console.error("Error saving live class:", err);
-      setError("An error occurred while saving live class.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleEdit = (liveClass) => {
-    setFormData({
-      title: liveClass.title,
-      description: liveClass.description,
-      classLink: liveClass.classLink,
-      mentor: liveClass.mentor,
-      startTime: liveClass.startTime ? format(new Date(liveClass.startTime), "yyyy-MM-dd'T'HH:mm") : '',
-      endTime: liveClass.endTime ? format(new Date(liveClass.endTime), "yyyy-MM-dd'T'HH:mm") : '',
-      batchCodes: liveClass.batchCodes || [],
-      isActive: liveClass.isActive,
+const AdminLiveClasses = () => {
+    const [classes, setClasses] = useState([]);
+    const [batches, setBatches] = useState([]);
+    const [mentors, setMentors] = useState([]);
+    const [user, setUser] = useState(null);
+    const [formData, setFormData] = useState({
+        topic: '', description: '', mentor: '', batch: '',
+        startTime: '', classType: 'external', link: ''
     });
-    setEditingClassId(liveClass._id);
-    setShowForm(true);
-  };
+    const [editingClassId, setEditingClassId] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [time, setTime] = useState(new Date());
+    const [activeTab, setActiveTab] = useState('all');
+    const [showModal, setShowModal] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this live class?')) {
-      return;
-    }
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/admin/live-classes?id=${id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        fetchLiveClassesAndBatches();
-      } else {
-        const data = await res.json();
-        if (res.status === 401) {
-          setError("Session expired. Please log in again.");
-          router.push('/login');
-        } else {
-          setError(data.error || 'Failed to delete live class.');
+    useEffect(() => {
+        const timer = setInterval(() => setTime(new Date()), 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    useEffect(() => {
+        fetchInitialData();
+    }, []);
+
+    const fetchInitialData = async () => {
+        setIsLoading(true);
+        try {
+            const [classesRes, batchesRes, usersRes, userRes] = await Promise.all([
+                axios.get('/api/admin/live-classes'),
+                axios.get('/api/admin/batches'),
+                axios.get('/api/admin/users'),
+                axios.get('/api/auth/user')
+            ]);
+
+            const currentUser = userRes?.data?.user;
+            setUser(currentUser);
+
+            setClasses(classesRes?.data?.data || []);
+            setBatches(batchesRes?.data?.batches || []);
+            
+            const allUsers = usersRes?.data?.users || [];
+            
+            if (currentUser?.role === 'mentor') {
+                const loggedInMentor = allUsers.find(u => u._id === currentUser._id);
+                setMentors(loggedInMentor ? [loggedInMentor] : []);
+                setFormData(prevState => ({ ...prevState, mentor: loggedInMentor?._id || '' }));
+            } else if (currentUser?.role === 'admin') {
+                setMentors(allUsers.filter(user => user.role === 'mentor' && user.status === 'approved'));
+            }
+
+        } catch (err) {
+            setError('Failed to fetch data. Please refresh the page.');
+        } finally {
+            setIsLoading(false);
         }
-      }
-    } catch (err) {
-      console.error("Error deleting live class:", err);
-      setError("An error occurred while deleting live class.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  // Helper function to get status styling
-  const getStatusClasses = (status) => {
-    switch (status) {
-      case 'Live Now': return 'admin-status-live';
-      case 'Upcoming': return 'admin-status-upcoming';
-      case 'Ended': return 'admin-status-ended';
-      case 'Inactive': return 'admin-status-inactive';
-      default: return 'admin-status-default';
-    }
-  };
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prevState => ({ ...prevState, [name]: value }));
+    };
 
-  if (loading) {
+    const resetForm = () => {
+        const initialMentorId = user?.role === 'mentor' && mentors.length > 0 ? mentors[0]._id : '';
+        setFormData({ topic: '', description: '', mentor: initialMentorId, batch: '', startTime: '', classType: 'external', link: '' });
+        setEditingClassId(null);
+        setShowModal(false);
+        setError('');
+    };
+
+    const handleEdit = (cls) => {
+        setEditingClassId(cls._id);
+        setFormData({
+            topic: cls.topic,
+            description: cls.description,
+            mentor: cls.mentor._id,
+            batch: cls.batch._id,
+            startTime: new Date(new Date(cls.startTime).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16),
+            classType: cls.classType,
+            link: cls.link || ''
+        });
+        setShowModal(true);
+    };
+
+    const handleDelete = async (id) => {
+        if (!window.confirm('Are you sure you want to delete this class?')) return;
+        try {
+            await axios.delete(`/api/admin/live-classes?id=${id}`);
+            setClasses(classes.filter(c => c._id !== id));
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to delete class.');
+        }
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        const url = '/api/admin/live-classes';
+        
+        try {
+            const response = editingClassId 
+                ? await axios.put(url, { ...formData, _id: editingClassId })
+                : await axios.post(url, formData);
+
+            if (editingClassId) {
+                setClasses(classes.map(c => c._id === editingClassId ? response.data.data : c));
+            } else {
+                setClasses([response.data.data, ...classes]);
+            }
+            resetForm();
+        } catch (err) {
+            setError(err.response?.data?.message || 'Failed to save class.');
+        }
+    };
+
+    const getClassStatus = (startTime) => {
+        const now = time.getTime();
+        const start = new Date(startTime).getTime();
+        const end = start + 60 * 60 * 1000;
+
+        if (now < start) return { status: 'upcoming', text: 'Upcoming' };
+        if (now >= start && now <= end) return { status: 'live', text: 'Live Now' };
+        return { status: 'ended', text: 'Ended' };
+    };
+
+    const filteredClasses = classes.filter(cls => {
+        const { status } = getClassStatus(cls.startTime);
+        const matchesSearch = cls.topic.toLowerCase().includes(searchQuery.toLowerCase());
+        return (activeTab === 'all' || status === activeTab) && matchesSearch;
+    });
+
+    if (isLoading) return <div className="loading-container"><div className="loader"></div></div>;
+
     return (
-      <div className="admin-loading-spinner">
-        <div></div>
-      </div>
-    );
-  }
+        <div className="live-class-dashboard">
+            <header className="page-header">
+                 <div>
+                    <h1 className="page-title">Live Classes</h1>
+                    <p className="page-subtitle">Create, manage, and monitor live sessions.</p>
+                </div>
+                <button onClick={() => setShowModal(true)} className="create-btn">
+                    <FiPlus /> New Class
+                </button>
+            </header>
 
-  if (error && !showForm) {
-    return (
-      <div className="admin-loading-spinner"> {/* Reusing the flex centering */}
-        <div className="admin-error-message">
-          {error}
-          <button
-            onClick={fetchLiveClassesAndBatches}
-            className="admin-action-button edit" // Reusing button style
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="admin-live-classes-page">
-      <div className="admin-live-classes-container">
-        <div className="admin-header">
-          <h1>Live Class Management</h1>
-          <button
-            onClick={() => {
-              setShowForm(!showForm);
-              setEditingClassId(null);
-              setFormData({
-                title: '',
-                description: '',
-                classLink: '',
-                mentor: '',
-                startTime: '',
-                endTime: '',
-                batchCodes: [],
-                isActive: true,
-              });
-            }}
-            className="admin-button-primary"
-          >
-            {showForm ? 'Cancel' : 'Schedule New Class'}
-          </button>
-        </div>
-
-        {error && showForm && (
-          <div className="admin-error-message">
-            {error}
-          </div>
-        )}
-
-        {showForm && (
-          <form onSubmit={handleSubmit} className="admin-form">
-            <div>
-              <label>
-                Title
-              </label>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-            <div>
-              <label>
-                Description
-              </label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                rows="3"
-                required
-              />
-            </div>
-            <div>
-              <label>
-                Class Link (e.g., Google Meet, Zoom URL, or type 'internal' for built-in)
-              </label>
-              <input
-                type="text"
-                name="classLink"
-                value={formData.classLink}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-            <div>
-              <label>
-                Mentor
-              </label>
-              <input
-                type="text"
-                name="mentor"
-                value={formData.mentor}
-                onChange={handleInputChange}
-                required
-              />
-            </div>
-            <div className="admin-form-grid">
-              <div>
-                <label>
-                  Start Time
-                </label>
-                <input
-                  type="datetime-local"
-                  name="startTime"
-                  value={formData.startTime}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-              <div>
-                <label>
-                  End Time
-                </label>
-                <input
-                  type="datetime-local"
-                  name="endTime"
-                  value={formData.endTime}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <label>
-                Batches (Select multiple)
-              </label>
-              <select
-                name="batchCodes"
-                multiple
-                value={formData.batchCodes}
-                onChange={handleBatchCodeChange}
-                required
-              >
-                {batches.length > 0 ? (
-                  batches.map(batch => (
-                    <option key={batch._id} value={batch.batchCode}>
-                      {batch.batchName} ({batch.batchCode})
-                    </option>
-                  ))
-                ) : (
-                  <option disabled>No batches available</option>
-                )}
-              </select>
-            </div>
-            <div className="admin-checkbox-container">
-              <input
-                type="checkbox"
-                name="isActive"
-                checked={formData.isActive}
-                onChange={handleInputChange}
-                id="isActive"
-              />
-              <label htmlFor="isActive">
-                Class is Active
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              className="admin-button-primary"
-              disabled={isSaving}
-            >
-              {isSaving ? 'Saving...' : (editingClassId ? 'Update Class' : 'Schedule Class')}
-            </button>
-          </form>
-        )}
-
-        <div className="admin-class-grid">
-          {liveClasses.length === 0 ? (
-            <div className="admin-no-classes">
-              No live classes scheduled yet.
-            </div>
-          ) : (
-            liveClasses.map((liveClass) => (
-              <div
-                key={liveClass._id}
-                className="admin-class-card"
-              >
-                <div className="admin-class-card-header">
-                    <div>
-                        <h2>{liveClass.title}</h2>
-                        <p>{liveClass.description}</p>
-                        <p className="mentor">Mentor: {liveClass.mentor}</p>
-                        <p>
-                            Batches: {liveClass.batchCodes.join(', ')}
-                        </p>
-                        <p>
-                            Start: {format(new Date(liveClass.startTime), 'MMM dd, yyyy HH:mm')}
-                        </p>
-                        <p>
-                            End: {format(new Date(liveClass.endTime), 'MMM dd, yyyy HH:mm')}
-                        </p>
-                        <span className={`admin-class-status ${getStatusClasses(liveClass.calculatedStatus)}`}>
-                            {liveClass.calculatedStatus}
-                        </span>
-                        <a
-                            href={liveClass.classLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="admin-join-class-link"
-                        >
-                            <MdOutlineVideocam /> Join Class
-                        </a>
-                    </div>
-                    <div className="admin-actions">
-                        <button
-                            onClick={() => handleEdit(liveClass)}
-                            className="admin-action-button edit"
-                        >
-                            Edit
-                        </button>
-                        <button
-                            onClick={() => handleDelete(liveClass._id)}
-                            className="admin-action-button delete"
-                        >
-                            Delete
-                        </button>
+            <div className="controls-container">
+                <div className="filter-tabs">
+                    <button onClick={() => setActiveTab('all')} className={`filter-tab ${activeTab === 'all' ? 'active' : ''}`}>All</button>
+                    <button onClick={() => setActiveTab('upcoming')} className={`filter-tab ${activeTab === 'upcoming' ? 'active' : ''}`}>Upcoming</button>
+                    <button onClick={() => setActiveTab('live')} className={`filter-tab ${activeTab === 'live' ? 'active' : ''}`}>Live</button>
+                    <button onClick={() => setActiveTab('ended')} className={`filter-tab ${activeTab === 'ended' ? 'active' : ''}`}>Ended</button>
+                </div>
+                <div className="search-container">
+                    <div className="search-input">
+                        <FiSearch className="search-icon" />
+                        <input type="text" placeholder="Search by topic..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                     </div>
                 </div>
-              </div>
-            ))
-          )}
+            </div>
+
+            <main className="classes-grid">
+                {error && <div className="error-message">{error}</div>}
+                {filteredClasses.length > 0 ? (
+                    filteredClasses.map(cls => {
+                        const { status, text } = getClassStatus(cls.startTime);
+                        const startDate = new Date(cls.startTime);
+                        return (
+                            <div key={cls._id} className={`class-card ${status}`}>
+                                <div className="card-header">
+                                    <h3 className="class-topic">{cls.topic}</h3>
+                                    <div className={`status-indicator ${status}`}>{text}</div>
+                                </div>
+                                <p className="class-description">{cls.description}</p>
+                                <div className="class-meta">
+                                    <div className="meta-item"><span>Mentor:</span> {cls.mentor?.name || 'N/A'}</div>
+                                    <div className="meta-item"><span>Batch:</span> {cls.batch?.batchName || 'N/A'}</div>
+                                    <div className="meta-item"><FiCalendar /> {startDate.toLocaleDateString()}</div>
+                                    <div className="meta-item"><FiClock /> {startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                                </div>
+                                <div className="card-footer">
+                                    <div className="card-actions">
+                                        <button onClick={() => handleEdit(cls)} className="action-btn edit-btn"><FiEdit /></button>
+                                        <button onClick={() => handleDelete(cls._id)} className="action-btn delete-btn"><FiTrash2 /></button>
+                                    </div>
+                                    {status === 'live' && (
+                                        cls.classType === 'webrtc' ? (
+                                            <Link href={`/admin/live-classes/${cls._id}`} target="_blank" className="join-btn">Join Class</Link>
+                                        ) : (
+                                            <a href={cls.link} target="_blank" rel="noopener noreferrer" className="join-btn">Join Link</a>
+                                        )
+                                    )}
+                                </div>
+                            </div>
+                        );
+                    })
+                ) : (
+                    <div className="empty-state">
+                        <div className="empty-icon"><FiVideo /></div>
+                        <h3>No Classes Found</h3>
+                        <p>No classes match your current filters.</p>
+                    </div>
+                )}
+            </main>
+
+            {showModal && (
+                <div className="modal-backdrop">
+                    <div className="modal-content">
+                        <div className="modal-header">
+                            <h2 className="modal-title">{editingClassId ? 'Edit Class' : 'Create New Class'}</h2>
+                            <button onClick={resetForm} className="close-btn"><FiX/></button>
+                        </div>
+                        <form onSubmit={handleSubmit} className="modal-body">
+                            {error && <div className="modal-error">{error}</div>}
+                            <div className="form-group">
+                                <label>Topic</label>
+                                <input type="text" name="topic" value={formData.topic} onChange={handleInputChange} required />
+                            </div>
+                            <div className="form-group">
+                                <label>Description</label>
+                                <textarea name="description" value={formData.description} onChange={handleInputChange} required rows="3"></textarea>
+                            </div>
+                            <div className="form-grid">
+                                <div className="form-group">
+                                    <label>Mentor</label>
+                                    <select name="mentor" value={formData.mentor} onChange={handleInputChange} required disabled={user?.role === 'mentor'}>
+                                        <option value="">Select Mentor</option>
+                                        {mentors.map(m => <option key={m._id} value={m._id}>{m.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="form-group">
+                                    <label>Batch</label>
+                                    <select name="batch" value={formData.batch} onChange={handleInputChange} required>
+                                        <option value="">Select Batch</option>
+                                        {batches.map(b => <option key={b._id} value={b._id}>{b.batchName}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="form-group">
+                                <label>Start Time</label>
+                                <input type="datetime-local" name="startTime" value={formData.startTime} onChange={handleInputChange} required />
+                            </div>
+                            <div className="form-group">
+                                <label>Class Type</label>
+                                <div className="status-options">
+                                    <div onClick={() => setFormData({...formData, classType: 'external'})} className={`status-option ${formData.classType === 'external' ? 'active' : ''}`}>External Link</div>
+                                    <div onClick={() => setFormData({...formData, classType: 'webrtc'})} className={`status-option ${formData.classType === 'webrtc' ? 'active' : ''}`}>Self-Hosted</div>
+                                </div>
+                            </div>
+                            {formData.classType === 'external' && (
+                                <div className="form-group">
+                                    <label>Meeting Link</label>
+                                    <input type="url" name="link" value={formData.link} onChange={handleInputChange} placeholder="https://..." />
+                                </div>
+                            )}
+                            <div className="modal-footer">
+                                <button type="button" onClick={resetForm} className="cancel-btn"><FiX /> Cancel</button>
+                                <button type="submit" className="save-btn"><FiSave /> {editingClassId ? 'Update' : 'Create'}</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
-      </div>
-    </div>
-  );
-}
+    );
+};
+
+export default AdminLiveClasses;

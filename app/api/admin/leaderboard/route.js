@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import ConnectToDB from "@/DB/ConnectToDB";
-import TestResult from "@/schema/TestResult"; // Assuming you have this schema
-import Test from "@/schema/Tests"; // Assuming you have this schema
-import Users from "@/schema/Users"; // Assuming you have this schema
+import TestResult from "@/schema/TestResult";
+import Test from "@/schema/Tests";
+import Users from "@/schema/Users";
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import mongoose from "mongoose";
 
-// Utility function to verify admin
-async function verifyAdmin(req) {
+// UPDATED: This function now returns the full user object for permission checks
+async function verifyAdminOrMentor(req) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('token');
@@ -18,13 +18,15 @@ async function verifyAdmin(req) {
     }
 
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
-    const user = await Users.findById(decoded.userId).select('-password');
+    await ConnectToDB();
+    const user = await Users.findById(decoded.userId).select('role');
 
-    if (!user || !user.isAdmin) {
+    if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
       return { success: false, error: 'Unauthorized access' };
     }
 
-    return { success: true, user };
+    // Return the user's role and ID for more granular checks
+    return { success: true, user: { _id: decoded.userId, role: user.role } };
   } catch (error) {
     return { success: false, error: 'Invalid token' };
   }
@@ -32,8 +34,7 @@ async function verifyAdmin(req) {
 
 export async function GET(req) {
   try {
-    // Verify if user is admin
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdminOrMentor(req);
     if (!authResult.success) {
       return NextResponse.json(
         { error: authResult.error },
@@ -47,21 +48,38 @@ export async function GET(req) {
     const testId = searchParams.get('testId');
 
     if (testId) {
-      // Fetch scores for a specific test
+      // Logic for fetching scores for a specific test
       if (!mongoose.Types.ObjectId.isValid(testId)) {
         return NextResponse.json({ error: "Invalid Test ID" }, { status: 400 });
       }
+      
+      const test = await Test.findById(testId);
+      if (!test) {
+          return NextResponse.json({ error: "Test not found" }, { status: 404 });
+      }
+
+      // Permission Check: Mentors can only view leaderboards for tests they created
+      if (authResult.user.role === 'mentor' && test.createdBy.toString() !== authResult.user._id) {
+          return NextResponse.json({ error: "You do not have permission to view this leaderboard." }, { status: 403 });
+      }
 
       const testResults = await TestResult.find({ test: testId })
-        .populate('student', 'name email') // Populate student name and email
-        .populate('test', 'title totalQuestions') // Populate test title and total questions
-        .sort({ score: -1, submittedAt: 1 }); // Sort by score highest first, then by submission time
+        .populate('student', 'name email')
+        .populate('test', 'title totalQuestions')
+        .sort({ score: -1, submittedAt: 1 });
 
       return NextResponse.json({ testResults }, { status: 200 });
 
     } else {
-      // Fetch all tests with their participant counts
-      const tests = await Test.find({}).select('title description');
+      // Logic for fetching the list of all available leaderboards (tests)
+      let query = {};
+      
+      // If the user is a mentor, only show tests created by them
+      if (authResult.user.role === 'mentor') {
+          query.createdBy = authResult.user._id;
+      }
+
+      const tests = await Test.find(query).select('title description');
 
       const leaderboardSummary = await Promise.all(tests.map(async (test) => {
         const studentCount = await TestResult.countDocuments({ test: test._id });

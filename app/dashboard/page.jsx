@@ -1,53 +1,76 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from 'next/link';
+import { BookOpen, ClipboardCheck, FileText, Video } from 'lucide-react';
+import './styles/StudentDashboard.css'; // Make sure this CSS file exists
 
-export default function Dashboard() {
-  const [batchInfos, setBatchInfos] = useState([]); // Changed to an array for multiple batches
+export default function StudentDashboard() {
+  const [user, setUser] = useState(null);
+  const [batchInfos, setBatchInfos] = useState([]);
+  const [overviewStats, setOverviewStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const getBatchInfos = async () => { // Renamed function
-    setLoading(true);
-    setError("");
-    try {
-      // The /api/batch1 route now returns an array of batch objects.
-      let res = await fetch("/api/batch1");
-      let data = await res.json();
-
-      if (res.ok) {
-        setBatchInfos(data.data); // data.data will now be an array of objects
-      } else {
-        setError(data.error || "Failed to fetch batch information.");
-      }
-    } catch (err) {
-      console.error("Error fetching batch info:", err);
-      setError("An error occurred while loading your batch details.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [date, setDate] = useState('');
 
   useEffect(() => {
-    getBatchInfos(); // Call the new function
+    setDate(new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
+    
+    const fetchData = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const [userRes, batchesRes, statsRes] = await Promise.all([
+            fetch("/api/auth/user"),
+            fetch("/api/batch1"),
+            fetch("/api/student/dashboard")
+        ]);
+
+        const userData = await userRes.json();
+        if (userRes.ok && userData.user) {
+            setUser(userData.user);
+        } else {
+            throw new Error(userData.error || "Failed to fetch user data.");
+        }
+        
+        const batchesData = await batchesRes.json();
+        if (batchesRes.ok) {
+            setBatchInfos(batchesData.data);
+        } else {
+            throw new Error(batchesData.error || "Failed to fetch batch information.");
+        }
+
+        const statsData = await statsRes.json();
+        if (statsRes.ok) {
+            setOverviewStats(statsData.overviewStats);
+        } else {
+            throw new Error(statsData.error || "Failed to fetch dashboard stats.");
+        }
+
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setError("An error occurred while loading your dashboard.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
   }, []);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="loading-container">
+        <div className="loader"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50">
-        <div className="text-red-600 mb-4 text-center px-4">{error}</div>
-        <button
-          onClick={getBatchInfos} // Call the new function
-          className="text-primary hover:underline mt-4"
-        >
+      <div className="error-container">
+        <p>{error}</p>
+        <button onClick={() => window.location.reload()} className="retry-button">
           Try Again
         </button>
       </div>
@@ -55,39 +78,54 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="bg-zinc-50 min-h-screen py-10 px-4 lg:px-10">
-      <h1 className="text-xl mb-6">Batches Overview</h1>
-      {batchInfos.length === 0 ? ( // Check array length
-        <div className="text-center text-gray-500 mt-8">
-          No batch information available for your account. Please contact your administrator.
-        </div>
-      ) : (
-        <div className="grid gap-6"> {/* Grid for multiple batches */}
-          {batchInfos.map((batchInfo, index) => ( // Map over the array
-            <div key={index} className="py-4 bg-white px-4 border-[1px] border-zinc-200 rounded">
-              <h2 className="text-xl font-semibold mb-4">
-                {batchInfo.batchName}
-              </h2>
-              <div className="grid grid-cols-1 my-7 gap-7 lg:grid-cols-2 lg:gap-10">
-                <div className="">
-                  <h3 className="font-semibold">Batch created at</h3>
-                  <span className="text-zinc-500 font-light">{batchInfo.batchCreatedAt}</span>
-                </div>
-                <div className="">
-                  <h3 className="font-semibold">Batch code</h3>
-                  <span className="text-zinc-500 font-light">{batchInfo.batchCode}</span>
-                </div>
-                <div className="">
-                  <h3 className="font-semibold">Subjects</h3>
-                  <span className="text-zinc-500 font-light ">
-                   {batchInfo.subjects}
-                  </span>
-                </div>
-              </div>
+    <div className="student-dashboard-container">
+        <header className="dashboard-header">
+            <div>
+                <h1 className="welcome-message">Welcome, {user?.name}!</h1>
+                <p className="header-subtitle">Your learning journey continues here.</p>
             </div>
-          ))}
-        </div>
-      )}
+            <div className="date-display">{date}</div>
+        </header>
+
+        <section className="overview-stats">
+            <Link href="/dashboard/assignments" className="overview-card overview-color-1">
+                <div className="overview-icon"><ClipboardCheck size={24} /></div>
+                <p className="overview-value">{overviewStats?.assignments ?? 0}</p>
+                <p className="overview-label">Total Assignments</p>
+            </Link>
+            <Link href="/dashboard/tests" className="overview-card overview-color-2">
+                <div className="overview-icon"><FileText size={24} /></div>
+                <p className="overview-value">{overviewStats?.tests ?? 0}</p>
+                <p className="overview-label">Total Tests</p>
+            </Link>
+            <Link href="/dashboard/live-classes" className="overview-card overview-color-3">
+                <div className="overview-icon"><Video size={24} /></div>
+                <p className="overview-value">{overviewStats?.liveClasses ?? 0}</p>
+                <p className="overview-label">Total Live Classes</p>
+            </Link>
+        </section>
+
+        <section className="batch-stats">
+          <h2 className="section-title">Your Batches</h2>
+          {batchInfos.length > 0 ? (
+            <div className="stats-grid">
+              {batchInfos.map((batch, index) => (
+                <div key={batch._id} className={`stat-card card-color-${index % 4}`}>
+                  <div className="card-icon"><BookOpen size={28} /></div>
+                  <h3 className="batch-name">{batch.batchName}</h3>
+                  <p className="batch-code">{batch.batchCode}</p>
+                  <p className="subjects-list">{batch.subjects}</p>
+                  <p className="subjects-label">Subjects</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="no-data-card">
+              <h2 className="no-data-title">No Batches Assigned</h2>
+              <p className="no-data-text">You are not currently assigned to any batches. Please contact an administrator.</p>
+            </div>
+          )}
+        </section>
     </div>
   );
 }

@@ -1,42 +1,47 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { MdDelete, MdCheckCircle, MdCancel, MdEdit, MdExpandMore } from "react-icons/md";
+import React, { useState, useEffect, useMemo } from "react";
+import { FiUsers, FiUserCheck, FiUserPlus, FiSearch, FiEdit, FiTrash2, FiSave, FiX, FiAlertTriangle } from 'react-icons/fi';
+import './AdminUserManagement.css'; // Using the new CSS file
 
 export default function AdminUserManagementPage() {
   const [users, setUsers] = useState([]);
-  const [batches, setBatches] = useState([]); // NEW: State to store available batches
+  const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [render, setRender] = useState(false);
-  const [editingUserId, setEditingUserId] = useState(null);
-  const [currentBatchCodes, setCurrentBatchCodes] = useState([]); // NEW: Array for batch codes
+  
+  const [editingUser, setEditingUser] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentBatchCodes, setCurrentBatchCodes] = useState([]);
   const [currentStatus, setCurrentStatus] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  const [filter, setFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+
   useEffect(() => {
-    fetchUsersAndBatches(); // Fetch both users and batches
-  }, [render]);
+    fetchUsersAndBatches();
+  }, []);
 
   const fetchUsersAndBatches = async () => {
     setLoading(true);
     setError("");
     try {
-      // Fetch users
-      const usersRes = await fetch("/api/admin/users");
+      const [usersRes, batchesRes] = await Promise.all([
+        fetch("/api/admin/users"),
+        fetch("/api/admin/batches")
+      ]);
+
       const usersData = await usersRes.json();
       if (usersRes.ok) {
-        setUsers(usersData.users.filter(user => !user.isAdmin).map(user => ({
-          ...user,
-          status: user.status || 'unknown',
-          batchCodes: user.batchCodes || [] // Ensure batchCodes is an array
-        })));
+        setUsers(usersData.users.filter(user => user.role !== 'admin'));
       } else {
         setError(usersData.error || "Failed to fetch users.");
       }
 
-      // Fetch batches
-      const batchesRes = await fetch("/api/admin/batches"); // Assuming this route fetches all batches
       const batchesData = await batchesRes.json();
       if (batchesRes.ok) {
         setBatches(batchesData.batches);
@@ -45,7 +50,6 @@ export default function AdminUserManagementPage() {
       }
 
     } catch (err) {
-      console.error("Error fetching users or batches:", err);
       setError("An error occurred while loading data.");
     } finally {
       setLoading(false);
@@ -53,16 +57,16 @@ export default function AdminUserManagementPage() {
   };
 
   const handleEditClick = (user) => {
-    setEditingUserId(user._id);
-    setCurrentBatchCodes(user.batchCodes || []); // Set current batch codes (array)
+    setEditingUser(user);
+    setCurrentBatchCodes(user.batchCodes || []);
     setCurrentStatus(user.status);
-    setError('');
+    setIsModalOpen(true);
   };
-
-  const handleBatchCodeChange = (e) => {
-    // For multi-select, collect all selected options
-    const selectedOptions = Array.from(e.target.selectedOptions).map(option => option.value);
-    setCurrentBatchCodes(selectedOptions);
+  
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingUser(null);
+    setError('');
   };
 
   const handleSaveUser = async (e) => {
@@ -70,8 +74,8 @@ export default function AdminUserManagementPage() {
     setIsSaving(true);
     setError("");
 
-    if (currentStatus === 'approved' && currentBatchCodes.length === 0) { // NEW: Check if array is empty
-        setError("At least one Batch Code is required for approved users.");
+    if (currentStatus === 'approved' && currentBatchCodes.length === 0) {
+        setError("At least one Batch is required for approved users.");
         setIsSaving(false);
         return;
     }
@@ -79,241 +83,251 @@ export default function AdminUserManagementPage() {
     try {
       const res = await fetch("/api/admin/users", {
         method: "PUT",
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: editingUserId,
+          userId: editingUser._id,
           status: currentStatus,
-          batchCodes: currentBatchCodes, // NEW: Send array of batch codes
+          batchCodes: currentBatchCodes,
         }),
       });
 
       const data = await res.json();
-
       if (res.ok) {
-        setEditingUserId(null);
-        setRender(prev => !prev); // Trigger re-fetch
+        handleCloseModal();
+        await fetchUsersAndBatches();
       } else {
         setError(data.error || "Failed to update user.");
       }
     } catch (err) {
-      console.error("Error saving user:", err);
       setError("An error occurred while saving user data.");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDeleteUser = async (userId) => {
-    if (!window.confirm("Are you sure you want to delete this user?")) {
-      return;
-    }
+  const openDeleteConfirm = (user) => {
+    setUserToDelete(user);
+    setIsConfirmModalOpen(true);
+  };
 
-    setLoading(true);
-    setError("");
+  const closeDeleteConfirm = () => {
+    setUserToDelete(null);
+    setIsConfirmModalOpen(false);
+  };
+  
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    setIsSaving(true);
     try {
-      const res = await fetch(`/api/admin/users?id=${userId}`, {
-        method: "DELETE",
-      });
-
+      const res = await fetch(`/api/admin/users?id=${userToDelete._id}`, { method: "DELETE" });
       if (res.ok) {
-        setRender(prev => !prev); // Trigger re-fetch
+        await fetchUsersAndBatches();
+        closeDeleteConfirm();
       } else {
         const data = await res.json();
         setError(data.error || "Failed to delete user.");
       }
     } catch (err) {
-      console.error("Error deleting user:", err);
       setError("An error occurred while deleting the user.");
     } finally {
-      setLoading(false);
+        setIsSaving(false);
     }
   };
 
+  const batchCodeToNameMap = useMemo(() => {
+    return batches.reduce((acc, batch) => {
+      acc[batch.batchCode] = batch.batchName;
+      return acc;
+    }, {});
+  }, [batches]);
+
+  const filteredUsers = useMemo(() => {
+    return users.filter(user => {
+        const matchesFilter = filter === 'all' || user.role === filter;
+        const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              user.email.toLowerCase().includes(searchTerm.toLowerCase());
+        return matchesFilter && matchesSearch;
+    });
+  }, [users, filter, searchTerm]);
+
+  const stats = useMemo(() => ({
+      students: users.filter(u => u.role === 'student').length,
+      mentors: users.filter(u => u.role === 'mentor').length,
+      pending: users.filter(u => u.status === 'pending').length,
+  }), [users]);
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
-
-  if (error && !editingUserId) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
-        <div className="max-w-md text-center bg-white p-6 rounded-lg shadow-md">
-          <div className="text-red-500 mb-4 font-medium">{error}</div>
-          <button
-            onClick={() => setRender(prev => !prev)}
-            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
+      <div className="loading-container">
+          <div className="loader"></div>
+          <p>Loading User Data...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">User Management</h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Manage user accounts, status, and batch assignments
+    <div className="user-management-container">
+      <header className="page-header">
+        <div>
+          <h1 className="page-title">User Management</h1>
+          <p className="page-subtitle">
+            Approve, manage, and assign batches to students and mentors.
           </p>
         </div>
-
-        {users.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-            <div className="text-gray-500 text-lg">No users registered yet.</div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {users.map((user) => (
-              <div 
-                key={user._id}
-                className={`bg-white rounded-xl shadow-sm overflow-hidden transition-all duration-200 ${
-                  editingUserId === user._id ? "ring-2 ring-blue-500" : ""
-                }`}
-              >
-                <div 
-                  className="flex items-center justify-between p-4 cursor-pointer"
-                  onClick={() => editingUserId === user._id ? setEditingUserId(null) : handleEditClick(user)}
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
-                      {user.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-gray-900">{user.name}</h3>
-                      <p className="text-sm text-gray-500">{user.email}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-4">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                      user.status === 'approved' ? 'bg-green-100 text-green-800' :
-                      user.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {user.status.charAt(0).toUpperCase() + user.status.slice(1)}
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditClick(user);
-                      }}
-                      className="text-gray-400 hover:text-blue-500 transition-colors"
-                    >
-                      <MdEdit className="h-5 w-5" />
-                    </button>
-                    <MdExpandMore className={`h-5 w-5 text-gray-400 transform transition-transform ${
-                      editingUserId === user._id ? 'rotate-180' : ''
-                    }`} />
-                  </div>
-                </div>
-
-                {editingUserId === user._id && (
-                  <div className="border-t border-gray-200 p-4">
-                    <form onSubmit={handleSaveUser} className="space-y-4">
-                      {error && (
-                        <div className="bg-red-50 border-l-4 border-red-500 p-4">
-                          <div className="flex">
-                            <div className="flex-shrink-0">
-                              <MdCancel className="h-5 w-5 text-red-500" />
-                            </div>
-                            <div className="ml-3">
-                              <p className="text-sm text-red-700">{error}</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                          <label htmlFor={`status-${user._id}`} className="block text-sm font-medium text-gray-700 mb-1">
-                            Status
-                          </label>
-                          <select
-                            id={`status-${user._id}`}
-                            name="status"
-                            value={currentStatus}
-                            onChange={(e) => setCurrentStatus(e.target.value)}
-                            className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-                          >
-                            <option value="pending">Pending</option>
-                            <option value="approved">Approved</option>
-                            <option value="rejected">Rejected</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label htmlFor={`batchCodes-${user._id}`} className="block text-sm font-medium text-gray-700 mb-1">
-                            Batch Codes (Select multiple if needed)
-                          </label>
-                          <select
-                            id={`batchCodes-${user._id}`}
-                            name="batchCodes"
-                            multiple // Enable multi-select
-                            value={currentBatchCodes}
-                            onChange={handleBatchCodeChange}
-                            className="block w-full shadow-sm sm:text-sm focus:ring-blue-500 focus:border-blue-500 border-gray-300 rounded-md h-32" // Increased height
-                          >
-                            {batches.length > 0 ? (
-                              batches.map(batch => (
-                                <option key={batch._id} value={batch.batchCode}>
-                                  {batch.batchName} ({batch.batchCode})
-                                </option>
-                              ))
-                            ) : (
-                              <option disabled>No batches available</option>
-                            )}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-                        <div className="text-sm text-gray-500">
-                          <p>Registered: {new Date(user.createdAt).toLocaleDateString()}</p>
-                          {user.updatedAt && <p>Last Updated: {new Date(user.updatedAt).toLocaleDateString()}</p>}
-                        </div>
-
-                        <div className="flex space-x-3">
-                          <button
-                            type="button"
-                            onClick={() => setEditingUserId(null)}
-                            className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                            disabled={isSaving}
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            type="submit"
-                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-                            disabled={isSaving}
-                          >
-                            {isSaving ? 'Saving...' : 'Save Changes'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteUser(user._id)}
-                            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
-                            disabled={isSaving}
-                          >
-                            <MdDelete className="mr-2 h-4 w-4" />
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </form>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        <div className="header-stats">
+            <div className="stat-card"><FiUserCheck className="stat-icon students" /><span className="stat-value">{stats.students}</span><span className="stat-label">Students</span></div>
+            <div className="stat-card"><FiUsers className="stat-icon mentors" /><span className="stat-value">{stats.mentors}</span><span className="stat-label">Mentors</span></div>
+            <div className="stat-card"><FiUserPlus className="stat-icon pending" /><span className="stat-value">{stats.pending}</span><span className="stat-label">Pending</span></div>
+        </div>
+      </header>
+      
+      <div className="controls-container">
+        <div className="filter-tabs">
+            <button onClick={() => setFilter('all')} className={`filter-tab ${filter === 'all' ? 'active' : ''}`}>All</button>
+            <button onClick={() => setFilter('student')} className={`filter-tab ${filter === 'student' ? 'active' : ''}`}>Students</button>
+            <button onClick={() => setFilter('mentor')} className={`filter-tab ${filter === 'mentor' ? 'active' : ''}`}>Mentors</button>
+        </div>
+        <div className="search-container">
+            <div className="search-input">
+                <FiSearch className="search-icon" />
+                <input 
+                    type="text"
+                    placeholder="Search users..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                />
+            </div>
+        </div>
       </div>
+
+      <div className="datatable-container">
+        <table className="user-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Batches</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredUsers.length === 0 ? (
+              <tr>
+                <td colSpan="5" className="empty-state">
+                  <div className="empty-content">
+                    <FiUsers className="empty-icon" />
+                    <h3>No Users Found</h3>
+                    <p>No users match your current filters.</p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              filteredUsers.map((user) => (
+                <tr key={user._id}>
+                  <td>
+                    <div className="user-info">
+                        <div className="user-avatar" style={{backgroundColor: `hsl(${user.name.charCodeAt(0) * 2 % 360}, 60%, 70%)`}}>
+                            {user.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                            <div className="user-name">{user.name}</div>
+                            <div className="user-email">{user.email}</div>
+                        </div>
+                    </div>
+                  </td>
+                  <td><span className={`role-pill ${user.role}`}>{user.role}</span></td>
+                  <td><span className={`status-pill ${user.status}`}>{user.status}</span></td>
+                  <td>
+                    <div className="batch-tags">
+                        {user.batchCodes && user.batchCodes.length > 0 ? 
+                            user.batchCodes.map(code => (
+                                <span key={code} className="batch-tag">{batchCodeToNameMap[code] || code}</span>
+                            )) : 
+                            <span className="no-batches">-</span>
+                        }
+                    </div>
+                  </td>
+                  <td>
+                    <div className="action-buttons">
+                        <button onClick={() => handleEditClick(user)} className="action-btn edit-btn" title="Edit User"><FiEdit /></button>
+                        <button onClick={() => openDeleteConfirm(user)} className="action-btn delete-btn" title="Delete User"><FiTrash2 /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {isModalOpen && editingUser && (
+        <div className="modal-backdrop">
+            <div className="modal-content">
+                <div className="modal-header">
+                    <h2 className="modal-title">Edit: {editingUser.name}</h2>
+                    <button onClick={handleCloseModal} className="close-btn"><FiX/></button>
+                </div>
+                <form onSubmit={handleSaveUser} className="modal-body">
+                    {error && <div className="modal-error">{error}</div>}
+                    <div className="form-group">
+                        <label>Status</label>
+                        <div className="status-options">
+                            <div onClick={() => setCurrentStatus('pending')} className={`status-option ${currentStatus === 'pending' ? 'active' : ''}`}>Pending</div>
+                            <div onClick={() => setCurrentStatus('approved')} className={`status-option ${currentStatus === 'approved' ? 'active' : ''}`}>Approved</div>
+                            <div onClick={() => setCurrentStatus('rejected')} className={`status-option ${currentStatus === 'rejected' ? 'active' : ''}`}>Rejected</div>
+                        </div>
+                    </div>
+                    <div className="form-group">
+                        <label>Assigned Batches</label>
+                        <div className="batch-select-container">
+                            <select 
+                                multiple 
+                                value={currentBatchCodes} 
+                                onChange={(e) => setCurrentBatchCodes(Array.from(e.target.selectedOptions, option => option.value))}
+                                className="batch-select"
+                            >
+                                {batches.map(batch => (
+                                    <option key={batch._id} value={batch.batchCode}>
+                                        {batch.batchName}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                    <div className="modal-footer">
+                        <button type="button" onClick={handleCloseModal} className="cancel-btn" disabled={isSaving}>
+                            <FiX /> Cancel
+                        </button>
+                        <button type="submit" className="save-btn" disabled={isSaving}>
+                            {isSaving ? <span className="spinner"></span> : <><FiSave /> Save</>}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {isConfirmModalOpen && userToDelete && (
+        <div className="modal-backdrop">
+          <div className="modal-content confirmation-modal">
+            <div className="confirmation-content">
+                <div className="warning-icon"><FiAlertTriangle /></div>
+                <h2 className="modal-title">Confirm Deletion</h2>
+                <p className="confirmation-text">
+                    Delete <strong>{userToDelete.name}</strong>? This is permanent.
+                </p>
+            </div>
+            <div className="modal-footer">
+                <button onClick={closeDeleteConfirm} className="cancel-btn">Cancel</button>
+                <button onClick={handleDeleteUser} className="delete-confirm-btn" disabled={isSaving}>
+                    {isSaving ? <span className="spinner"></span> : 'Delete'}
+                </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

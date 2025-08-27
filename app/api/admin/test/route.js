@@ -1,14 +1,14 @@
-// app/api/admin/test/route.js
 import { NextResponse } from "next/server";
 import ConnectToDB from "@/DB/ConnectToDB";
 import Test from "@/schema/Tests";
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import Users from "@/schema/Users";
-import Notification from "@/schema/Notification"; // NEW: Import Notification schema
+import Batch1 from "@/schema/Batch1"; // Import Batch1 schema
+import Notification from "@/schema/Notification";
 
-// Verify admin authentication
-async function verifyAdmin(req) {
+// UPDATED: This function now returns the full user object for more detailed checks
+async function verifyAdminOrMentor(req) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('token');
@@ -18,13 +18,15 @@ async function verifyAdmin(req) {
     }
 
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
-    const user = await Users.findById(decoded.userId).select('-password');
+    await ConnectToDB();
+    // Fetch the user's role and their assigned batchCodes
+    const user = await Users.findById(decoded.userId).select('role batchCodes');
 
-    if (!user || !user.isAdmin) {
+    if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
       return { success: false, error: 'Unauthorized access' };
     }
 
-    return { success: true, user };
+    return { success: true, user }; // Return the full user object
   } catch (error) {
     return { success: false, error: 'Invalid token' };
   }
@@ -33,41 +35,41 @@ async function verifyAdmin(req) {
 // Create a new test
 export async function POST(req) {
   try {
-    // Verify if user is admin
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdminOrMentor(req);
     if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
 
     const testData = await req.json();
 
-    // NEW: Validate batchCode for new test creation
     if (!testData.batchCode) {
       return NextResponse.json({ error: "Batch code is required for new tests" }, { status: 400 });
     }
 
-    // Connect to database
+    // Permission Check: A mentor can only create a test for a batch they are assigned to.
+    if (authResult.user.role === 'mentor' && !authResult.user.batchCodes.includes(testData.batchCode)) {
+        return NextResponse.json({ error: "You do not have permission to create a test for this batch." }, { status: 403 });
+    }
+
     await ConnectToDB();
 
-    // Create new test (Mongoose will handle the deadline field if it's present in testData)
-    const test = await Test.create(testData);
+    const test = await Test.create({
+        ...testData,
+        createdBy: authResult.user._id // Set the creator of the test
+    });
 
-    // NEW: Create notifications for all users in the specified batch
     if (test) {
       const usersInBatch = await Users.find({
         batchCodes: test.batchCode,
-        isAdmin: false, // Only notify regular users
-        status: 'approved', // Only notify approved users
+        role: 'student',
+        status: 'approved',
       });
 
       for (const user of usersInBatch) {
         await Notification.create({
           user: user._id,
           message: `A new test "${test.title}" has been posted for your batch!`,
-          link: `/dashboard/tests/${test._id}`, // Link to the specific test page
+          link: `/dashboard/tests/${test._id}`,
           batchCode: test.batchCode,
           type: "new_test",
         });
@@ -87,27 +89,46 @@ export async function POST(req) {
   }
 }
 
-// Get all tests (Admin view)
+// Get tests (with role-based filtering by batch)
 export async function GET(req) {
   try {
-    // Verify if user is admin (added for consistency, though it was missing in the original GET)
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdminOrMentor(req);
     if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
 
-    // Connect to database
     await ConnectToDB();
+    
+    let query = {};
 
-    // Get all tests, sorted by creation date, including the deadline
-    const tests = await Test.find({})
-      .sort({ createdAt: -1 });
-      // .select('-questions.correctOption'); // Removed this line to show correctOption for admin view as per existing logic
+    // UPDATED: If the user is a mentor, show all tests from their assigned batches
+    if (authResult.user.role === 'mentor') {
+        if (authResult.user.batchCodes && authResult.user.batchCodes.length > 0) {
+            query.batchCode = { $in: authResult.user.batchCodes };
+        } else {
+            // If mentor has no batches, return an empty array
+            return NextResponse.json({ tests: [] }, { status: 200 });
+        }
+    }
+    // Admins will have an empty query object, fetching all tests
 
-    return NextResponse.json({ tests }, { status: 200 });
+    const tests = await Test.find(query).sort({ createdAt: -1 });
+
+    // Fetch batch names
+    const batchCodes = tests.map(test => test.batchCode);
+    const batches = await Batch1.find({ batchCode: { $in: batchCodes } }).select('batchCode batchName').lean();
+    const batchCodeToNameMap = batches.reduce((acc, batch) => {
+        acc[batch.batchCode] = batch.batchName;
+        return acc;
+    }, {});
+    
+    // Add batchName to each test object
+    const testsWithBatchNames = tests.map(test => ({
+        ...test.toObject(),
+        batchName: batchCodeToNameMap[test.batchCode] || 'Unknown Batch'
+    }));
+
+    return NextResponse.json({ tests: testsWithBatchNames }, { status: 200 });
   } catch (error) {
     console.error("Error fetching tests:", error);
     return NextResponse.json(

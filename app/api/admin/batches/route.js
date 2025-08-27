@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import ConnectToDB from "@/DB/ConnectToDB";
-import Batch1 from "@/schema/Batch1"; // Using the Batch1 schema
-import Users from "@/schema/Users"; // For admin verification
+import Batch1 from "@/schema/Batch1";
+import Users from "@/schema/Users";
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
-import mongoose from "mongoose"; // For ObjectId validation
+import mongoose from "mongoose";
 
-// Utility function to verify admin
+// New, stricter function to verify ADMIN ONLY
 async function verifyAdmin(req) {
   try {
     const cookieStore = cookies();
@@ -17,9 +17,34 @@ async function verifyAdmin(req) {
     }
 
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
-    const user = await Users.findById(decoded.userId).select('-password');
+    await ConnectToDB();
+    const user = await Users.findById(decoded.userId).select('role');
 
-    if (!user || !user.isAdmin) {
+    if (!user || user.role !== 'admin') { // Check for 'admin' role specifically
+      return { success: false, error: 'Unauthorized access: Administrator role required.' };
+    }
+
+    return { success: true, user };
+  } catch (error) {
+    return { success: false, error: 'Invalid token' };
+  }
+}
+
+// Existing function to allow both admins and mentors (for viewing)
+async function verifyAdminOrMentor(req) {
+  try {
+    const cookieStore = cookies();
+    const token = cookieStore.get('token');
+
+    if (!token) {
+      return { success: false, error: 'No token found' };
+    }
+
+    const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
+    await ConnectToDB();
+    const user = await Users.findById(decoded.userId).select('role batchCodes');
+
+    if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
       return { success: false, error: 'Unauthorized access' };
     }
 
@@ -29,15 +54,12 @@ async function verifyAdmin(req) {
   }
 }
 
-// POST method to create a new batch
+// POST method to create a new batch (ADMIN ONLY)
 export async function POST(req) {
   try {
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdmin(req); // USE STRICT VERIFICATION
     if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: authResult.error }, { status: 403 });
     }
 
     const { batchName, batchCreatedAt, batchCode, subjects } = await req.json();
@@ -48,7 +70,6 @@ export async function POST(req) {
 
     await ConnectToDB();
 
-    // Check if batchCode already exists
     const existingBatch = await Batch1.findOne({ batchCode });
     if (existingBatch) {
       return NextResponse.json({ error: "Batch code already exists. Please use a unique code." }, { status: 409 });
@@ -74,20 +95,27 @@ export async function POST(req) {
   }
 }
 
-// GET method to fetch all batches
+// GET method to fetch batches (Admins see all, Mentors see their assigned batches)
 export async function GET(req) {
   try {
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdminOrMentor(req); // Allow mentors to view
     if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
 
     await ConnectToDB();
 
-    const batches = await Batch1.find({}).sort({ createdAt: -1 });
+    let query = {};
+
+    if (authResult.user.role === 'mentor') {
+      if (authResult.user.batchCodes && authResult.user.batchCodes.length > 0) {
+        query.batchCode = { $in: authResult.user.batchCodes };
+      } else {
+        return NextResponse.json({ batches: [] }, { status: 200 });
+      }
+    }
+
+    const batches = await Batch1.find(query).sort({ createdAt: -1 });
 
     return NextResponse.json({ batches }, { status: 200 });
   } catch (error) {
@@ -99,15 +127,12 @@ export async function GET(req) {
   }
 }
 
-// PUT method to update a batch
+// PUT method to update a batch (ADMIN ONLY)
 export async function PUT(req) {
   try {
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdmin(req); // USE STRICT VERIFICATION
     if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: authResult.error }, { status: 403 });
     }
 
     const { _id, batchName, batchCreatedAt, batchCode, subjects } = await req.json();
@@ -121,12 +146,10 @@ export async function PUT(req) {
 
     await ConnectToDB();
 
-    // Check if the new batchCode conflicts with another existing batch
     const existingBatchWithCode = await Batch1.findOne({ batchCode, _id: { $ne: _id } });
     if (existingBatchWithCode) {
-        return NextResponse.json({ error: "Batch code already exists for another batch. Please use a unique code." }, { status: 409 });
+        return NextResponse.json({ error: "Batch code already exists for another batch." }, { status: 409 });
     }
-
 
     const updatedBatch = await Batch1.findByIdAndUpdate(
       _id,
@@ -151,15 +174,12 @@ export async function PUT(req) {
   }
 }
 
-// DELETE method to delete a batch
+// DELETE method to delete a batch (ADMIN ONLY)
 export async function DELETE(req) {
   try {
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdmin(req); // USE STRICT VERIFICATION
     if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: authResult.error }, { status: 403 });
     }
 
     const { searchParams } = new URL(req.url);

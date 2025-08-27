@@ -1,32 +1,34 @@
-// models/User.js or similar
 import { Schema, models, model } from "mongoose";
 
 const userSchema = new Schema(
   {
     name: {
       type: String,
-      required: [true, "name is required"],
+      required: [true, "Name is required"],
     },
     email: {
       type: String,
-      required: [true, "email is required"],
+      required: [true, "Email is required"],
+      unique: true,
+      lowercase: true,
     },
     password: {
       type: String,
-      required: [true, "password is required"],
+      required: [true, "Password is required"],
     },
-    isAdmin: {
-      type: Boolean,
-      required: [true, "user type is required"],
-    },
-    batchCodes: { // NEW: Changed to an array of Strings
-      type: [String],
-      default: [], // Default to an empty array
-    },
-    status: { // New field for user status
+    role: {
       type: String,
-      enum: ['pending', 'approved', 'rejected'], // Possible statuses
-      default: 'pending', // Default status for new registrations
+      enum: ['student', 'mentor', 'admin'],
+      default: 'student',
+    },
+    batchCodes: {
+      type: [String],
+      default: [],
+    },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
     },
   },
   { timestamps: true }

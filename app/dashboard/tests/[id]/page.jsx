@@ -7,12 +7,10 @@ export default function TakeTest({ params }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  const resolvedParams = React.use(params);
-  const testId = resolvedParams.id; 
+  const { id: testId } = React.use(params); // CORRECTED: Use React.use() to get the testId
   const viewMode = searchParams.get('view'); 
 
   const [test, setTest] = useState(null);
-  const [testResult, setTestResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -20,42 +18,40 @@ export default function TakeTest({ params }) {
   const [showResults, setShowResults] = useState(false);
   const [score, setScore] = useState(0);
   const [isDeadlineOver, setIsDeadlineOver] = useState(false); 
+  const [historicalResult, setHistoricalResult] = useState(null);
 
   useEffect(() => {
     if (viewMode === 'history' && testId) {
       fetchHistoricalTestResult(testId);
     } else if (testId) {
-      fetchTest(testId);
+      fetchTestForTaking(testId);
     } else {
       setError("Test ID not provided.");
       setLoading(false);
     }
   }, [testId, viewMode]);
 
-  const fetchTest = async (id) => {
+  const fetchTestForTaking = async (id) => {
     try {
       const res = await fetch(`/api/tests/${id}`);
       const data = await res.json();
       if (res.ok) {
         setTest(data.test);
         if (data.test.deadline) {
-          const now = new Date();
-          const testDeadline = new Date(data.test.deadline);
-          if (now > testDeadline) {
+          if (new Date() > new Date(data.test.deadline)) {
             setIsDeadlineOver(true);
-            setError(`Test is unavailable. The deadline for this test was ${testDeadline.toLocaleDateString()}.`);
+            setError(`The deadline for this test has passed.`);
             setLoading(false);
             return; 
           }
         }
-
         const initialAnswers = {};
         (data.test.questions || []).forEach((_, index) => {
           initialAnswers[index] = null;
         });
         setAnswers(initialAnswers);
       } else {
-        setError('Failed to fetch test details.');
+        setError(data.error || 'Failed to fetch test details.');
       }
     } catch (error) { 
       setError('Error loading test details.');
@@ -66,24 +62,23 @@ export default function TakeTest({ params }) {
 
   const fetchHistoricalTestResult = async (id) => {
     try {
-      const res = await fetch(`/api/test-results?testId=${id}`);
+      const res = await fetch(`/api/test-results/${id}`);
       const data = await res.json();
 
-      if (res.ok && data.testResults && data.testResults.length > 0) {
-        const latestResult = data.testResults[0]; 
-        setTestResult(latestResult);
-        setTest(latestResult.test); 
-        setScore(latestResult.score);
+      if (res.ok) {
+        const result = data.testResult;
+        setHistoricalResult(result);
+        setTest(result.test); 
+        setScore(result.score);
         
         const historicalAnswers = {};
-        (latestResult.answers || []).forEach(ans => { 
+        (result.answers || []).forEach(ans => { 
           historicalAnswers[ans.questionIndex] = ans.selectedOptionIndex;
         });
         setAnswers(historicalAnswers);
         setShowResults(true); 
       } else {
-        setError('No historical record found for this test, or failed to fetch.');
-        router.push('/dashboard/tests');
+        setError(data.error || 'Failed to fetch your test history.');
       }
     } catch (error) {
       setError('Error loading historical test results.');
@@ -94,68 +89,36 @@ export default function TakeTest({ params }) {
 
   const handleAnswer = (questionIndex, optionIndex) => {
     if (viewMode === 'history' || isDeadlineOver) return; 
-
-    setAnswers(prev => ({
-      ...prev,
-      [questionIndex]: optionIndex
-    }));
-  };
-
-  const calculateScore = () => {
-    let correctAnswers = 0;
-    (test?.questions || []).forEach((question, index) => { 
-      if (Number(answers[index]) === Number(question.correctOption)) {
-        correctAnswers++;
-      }
-    });
-    return correctAnswers;
+    setAnswers(prev => ({ ...prev, [questionIndex]: optionIndex }));
   };
 
   const handleSubmit = async () => {
     if (viewMode === 'history' || isDeadlineOver) return; 
 
-    const finalScore = calculateScore();
-    setScore(finalScore);
-
-    const answersToStore = (test?.questions || []).map((question, index) => ({ 
-      questionIndex: index,
-      selectedOptionIndex: answers[index],
-      isCorrect: Number(answers[index]) === Number(question.correctOption),
-    }));
-
     try {
-      const res = await fetch('/api/test-results', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          testId: test._id,
-          answers: answersToStore,
-        }),
-      });
-
-      if (res.ok) {
-        console.log('Test results successfully stored!');
-        const savedResult = await res.json();
-        setTestResult(savedResult.result); 
-      } else {
-        const errorData = await res.json();
-        console.error('Failed to store test results:', errorData.error);
-        setError(errorData.error || 'Failed to save test results.');
-      }
-    } catch (networkError) {
-      console.error('Network error while storing test results:', networkError);
-      setError('A network error occurred while submitting your test. Please try again.');
+        const res = await fetch('/api/test-results', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              testId: test._id,
+              answers: Object.keys(answers).map(qIndex => ({
+                  questionIndex: parseInt(qIndex),
+                  selectedOptionIndex: answers[qIndex]
+              }))
+            }),
+        });
+        if (res.ok) {
+            fetchHistoricalTestResult(test._id);
+        } else {
+            const errorData = await res.json();
+            setError(errorData.error || 'Failed to save test results.');
+        }
+    } catch (err) {
+        setError('A network error occurred while submitting your test.');
     }
-
-    setShowResults(true);
   };
 
-  const isTestComplete = () => {
-    if (viewMode === 'history' || isDeadlineOver) return true; 
-    return Object.values(answers).every(answer => answer !== null);
-  };
+  const isTestComplete = () => Object.values(answers).every(answer => answer !== null);
 
   if (loading) {
     return (
@@ -167,103 +130,79 @@ export default function TakeTest({ params }) {
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50">
-        <div className="text-red-600 mb-4 text-center px-4">{error}</div>
-        <button
-          onClick={() => router.push('/dashboard/tests')}
-          className="text-primary hover:underline mt-4"
-        >
+      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50 p-4">
+        <div className="text-red-600 mb-4 text-center">{error}</div>
+        <button onClick={() => router.push('/dashboard/tests')} className="text-primary hover:underline mt-4">
           Return to Tests
         </button>
       </div>
     );
   }
+  
+  if (!test) return null;
 
-  if (!test) {
+  if (showResults && historicalResult) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50">
-        <div className="text-gray-600 mb-4">Test not found</div>
-        <button
-          onClick={() => router.push('/dashboard/tests')}
-          className="text-primary hover:underline"
-        >
-          Return to Tests
-        </button>
-      </div>
-    );
-  }
-
-  if (showResults) {
-    return (
-      <div className="min-h-screen bg-zinc-50 py-10 px-4 lg:px-10">
-        <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-sm p-8">
-          <h1 className="text-2xl font-bold mb-6">
-            {viewMode === 'history' ? 'Test Results History' : 'Your Test Results'}
-          </h1>
-          {testResult && ( 
-            <p className="text-sm text-gray-500 mb-4">
-              Submitted on: {new Date(testResult.submittedAt).toLocaleString()}
-            </p>
-          )}
-          <div className="mb-8">
-            <div className="text-xl mb-2">
-              Your Score: {score} out of {(test?.questions?.length || 0)} 
+      <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-4xl mx-auto">
+          <header className="bg-white rounded-xl shadow-md p-6 mb-8 text-center">
+            <h1 className="text-2xl font-bold text-gray-800">{test.title}</h1>
+            <p className="text-sm text-gray-500 mt-1">Submitted on: {new Date(historicalResult.submittedAt).toLocaleString()}</p>
+            <div className="mt-6 flex justify-center items-center gap-8">
+                <div>
+                    <p className="text-sm font-medium text-gray-500">SCORE</p>
+                    <p className="text-4xl font-bold text-indigo-600">{historicalResult.score} / {historicalResult.totalQuestions}</p>
+                </div>
+                <div>
+                    <p className="text-sm font-medium text-gray-500">PERCENTAGE</p>
+                    <p className="text-4xl font-bold text-indigo-600">{((historicalResult.score / historicalResult.totalQuestions) * 100).toFixed(2)}%</p>
+                </div>
             </div>
-            <div className="text-lg text-gray-600">
-              Percentage: {((score / (test?.questions?.length || 1)) * 100).toFixed(2)}% 
-            </div>
-          </div>
+          </header>
 
           <div className="space-y-6">
-            {(test?.questions || []).map((question, index) => ( 
-              <div 
-                key={index}
-                className={`p-4 rounded-lg ${
-                  Number(answers[index]) === Number(question.correctOption)
-                    ? 'bg-green-50' 
-                    : 'bg-red-50' 
-                }`}
-              >
-                <div className="font-medium mb-2">
-                  Question {index + 1}: {question.questionText}
+            <h2 className="text-xl font-semibold text-gray-700">Question Review</h2>
+            {test.questions.map((question, index) => {
+              const userAnswer = historicalResult.answers.find(a => a.questionIndex === index);
+              const isCorrect = userAnswer?.isCorrect;
+              
+              return (
+                <div key={index} className="bg-white rounded-xl shadow-md p-6">
+                  <div className="flex justify-between items-start">
+                    <p className="font-semibold text-gray-800">Question {index + 1}: {question.questionText}</p>
+                    {isCorrect ? 
+                        <span className="text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-full">Correct</span> :
+                        <span className="text-xs font-semibold text-red-700 bg-red-100 px-2 py-1 rounded-full">Incorrect</span>
+                    }
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {question.options.map((option, optionIndex) => {
+                      const isSelectedAnswer = userAnswer?.selectedOptionIndex === optionIndex;
+                      const isCorrectAnswer = question.correctOption === optionIndex;
+
+                      return (
+                        <div key={optionIndex} className={`p-3 rounded-lg border ${
+                            isCorrectAnswer ? 'bg-green-50 border-green-300 text-green-800' :
+                            isSelectedAnswer ? 'bg-red-50 border-red-300 text-red-800' :
+                            'bg-gray-50 border-gray-200'
+                        }`}>
+                          {option.optionText}
+                          {isSelectedAnswer && !isCorrectAnswer && <span className="font-semibold ml-2">(Your Answer)</span>}
+                          {isCorrectAnswer && <span className="font-semibold ml-2">(Correct Answer)</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="grid gap-2">
-                  {(question.options || []).map((option, optionIndex) => ( 
-                    <div 
-                      key={optionIndex}
-                      className={`p-2 rounded 
-                        ${Number(optionIndex) === Number(question.correctOption) 
-                          ? 'bg-green-100 text-green-800 border border-green-300' 
-                          : Number(answers[index]) === Number(optionIndex) 
-                          ? 'bg-red-100 text-red-800 border border-red-300' 
-                          : 'bg-gray-50 text-gray-700' 
-                        }`
-                      }
-                    >
-                      {option.optionText}
-                      {Number(optionIndex) === Number(answers[index]) && ( 
-                        <span className="ml-2 font-semibold"> (Your Answer)</span>
-                      )}
-                      {Number(optionIndex) === Number(question.correctOption) && 
-                        (Number(answers[index]) !== Number(optionIndex) ? ( 
-                          <span className="ml-2 font-semibold text-green-600"> (Correct Answer)</span>
-                        ) : (
-                          <span className="ml-2 font-semibold text-green-600"> (Correct)</span> 
-                        )
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
-          <button
-            onClick={() => router.push('/dashboard/tests')}
-            className="mt-8 bg-primary text-white px-6 py-2 rounded-md hover:bg-primary/90 transition-colors"
-          >
-            Back to Tests
-          </button>
+          <div className="text-center mt-8">
+            <button onClick={() => router.push('/dashboard/tests')} className="bg-primary text-white px-6 py-2 rounded-md hover:bg-primary/90">
+              Back to Tests
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -276,59 +215,34 @@ export default function TakeTest({ params }) {
           <div className="mb-8">
             <h1 className="text-2xl font-bold mb-2">{test.title}</h1>
             <p className="text-gray-600">{test.description}</p>
-            {test.deadline && (
-              <p className="text-sm text-gray-500 mt-2">
-                Deadline: {new Date(test.deadline).toLocaleDateString()}
-              </p>
-            )}
           </div>
 
           <div className="mb-6">
             <div className="flex justify-between items-center">
               <div className="text-sm text-gray-500">
-                Question {currentQuestion + 1} of {(test?.questions?.length || 0)} 
+                Question {currentQuestion + 1} of {test.questions.length}
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={() => setCurrentQuestion(prev => Math.max(0, prev - 1))}
-                  disabled={currentQuestion === 0 || isDeadlineOver} 
-                  className="px-3 py-1 rounded border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                >
+                <button onClick={() => setCurrentQuestion(prev => Math.max(0, prev - 1))} disabled={currentQuestion === 0} className="px-3 py-1 rounded border disabled:opacity-50 hover:bg-gray-50">
                   Previous
                 </button>
-                <button
-                  onClick={() => setCurrentQuestion(prev => Math.min((test?.questions?.length || 1) - 1, prev + 1))} 
-                  disabled={currentQuestion === ((test?.questions?.length || 1) - 1) || isDeadlineOver} 
-                  className="px-3 py-1 rounded border disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
-                >
+                <button onClick={() => setCurrentQuestion(prev => Math.min(test.questions.length - 1, prev + 1))} disabled={currentQuestion === test.questions.length - 1} className="px-3 py-1 rounded border disabled:opacity-50 hover:bg-gray-50">
                   Next
                 </button>
               </div>
             </div>
             <div className="w-full bg-gray-200 h-2 rounded-full mt-2">
-              <div 
-                className="bg-primary h-2 rounded-full transition-all duration-300"
-                style={{ width: `${(((currentQuestion + 1) / (test?.questions?.length || 1)) * 100)}%` }} 
-              ></div>
+              <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${((currentQuestion + 1) / test.questions.length) * 100}%` }}></div>
             </div>
           </div>
 
           <div className="mb-8">
             <h2 className="text-lg font-medium mb-4">
-              {(test?.questions?.[currentQuestion]?.questionText || 'Loading question...')} 
+              {test.questions[currentQuestion].questionText}
             </h2>
             <div className="space-y-3">
-              {(test?.questions?.[currentQuestion]?.options || []).map((option, index) => ( 
-                <button
-                  key={index}
-                  onClick={() => handleAnswer(currentQuestion, index)}
-                  className={`w-full text-left p-3 rounded-md border transition-colors ${
-                    answers[currentQuestion] === index
-                      ? 'bg-primary/10 border-primary'
-                      : 'hover:bg-gray-50'
-                  } ${isDeadlineOver ? 'opacity-50 cursor-not-allowed' : ''}`} 
-                  disabled={isDeadlineOver}
-                >
+              {test.questions[currentQuestion].options.map((option, index) => (
+                <button key={index} onClick={() => handleAnswer(currentQuestion, index)} className={`w-full text-left p-3 rounded-md border transition-colors ${answers[currentQuestion] === index ? 'bg-primary/10 border-primary' : 'hover:bg-gray-50'}`}>
                   {option.optionText}
                 </button>
               ))}
@@ -337,13 +251,9 @@ export default function TakeTest({ params }) {
 
           <div className="flex justify-between items-center">
             <div className="text-sm text-gray-500">
-              {Object.values(answers).filter(a => a !== null).length} of {(test?.questions?.length || 0)} questions answered 
+              {Object.values(answers).filter(a => a !== null).length} of {test.questions.length} answered
             </div>
-            <button
-              onClick={handleSubmit}
-              disabled={!isTestComplete() || isDeadlineOver} 
-              className="bg-primary text-white px-6 py-2 rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={handleSubmit} disabled={!isTestComplete()} className="bg-primary text-white px-6 py-2 rounded-md hover:bg-primary/90 disabled:opacity-50">
               Submit Test
             </button>
           </div>

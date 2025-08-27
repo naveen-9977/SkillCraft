@@ -1,14 +1,5 @@
-import mongoose from "mongoose";
+import dbConnect from "@/lib/dbConnect";
 
 export default async function ConnectToDB() {
-  try {
-    mongoose.connect(process.env.MONGODB_URL, {
-      dbName: process.env.MONGODB_DB_NAME,
-    });
-
-    console.log('Successfully connected to MongoDB');
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    throw error; // Re-throw the error to handle it in the registration API
-  }
+  return await dbConnect();
 }

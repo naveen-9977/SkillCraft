@@ -1,30 +1,27 @@
-// app/api/admin/announcements/route.js
 import { NextResponse } from "next/server";
 import ConnectToDB from "@/DB/ConnectToDB";
 import Announcement from "@/schema/Announcement";
 import Users from "@/schema/Users";
+import Batch1 from "@/schema/Batch1"; // Import Batch1 schema
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import mongoose from "mongoose";
-import Notification from "@/schema/Notification"; // NEW: Import Notification schema
+import Notification from "@/schema/Notification";
 
-// Utility function to verify admin
-async function verifyAdmin(req) {
+// UPDATED: This function now returns the full user object for detailed checks
+async function verifyAdminOrMentor(req) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('token');
-
-    if (!token) {
-      return { success: false, error: 'No token found' };
-    }
-
+    if (!token) return { success: false, error: 'No token found' };
+    
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
-    const user = await Users.findById(decoded.userId).select('-password');
+    await ConnectToDB();
+    const user = await Users.findById(decoded.userId).select('role batchCodes');
 
-    if (!user || !user.isAdmin) {
+    if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
       return { success: false, error: 'Unauthorized access' };
     }
-
     return { success: true, user };
   } catch (error) {
     return { success: false, error: 'Invalid token' };
@@ -34,174 +31,145 @@ async function verifyAdmin(req) {
 // POST method to create a new announcement
 export async function POST(req) {
   try {
-    const authResult = await verifyAdmin(req);
-    if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
-    }
+    const authResult = await verifyAdminOrMentor(req);
+    if (!authResult.success) return NextResponse.json({ error: authResult.error }, { status: 401 });
 
     const { title, mentor, message, batchCode } = await req.json();
-
     if (!title || !mentor || !message || !batchCode) {
-      return NextResponse.json({ error: "All fields including batch code are required" }, { status: 400 });
+      return NextResponse.json({ error: "All fields are required" }, { status: 400 });
+    }
+
+    if (authResult.user.role === 'mentor' && !authResult.user.batchCodes.includes(batchCode)) {
+        return NextResponse.json({ error: "You do not have permission to create an announcement for this batch." }, { status: 403 });
     }
 
     await ConnectToDB();
-
-    const newAnnouncement = await Announcement.create({
-      title,
-      mentor,
-      message,
-      batchCode,
+    const newAnnouncement = await Announcement.create({ 
+        title, 
+        mentor, 
+        message, 
+        batchCode,
+        createdBy: authResult.user._id
     });
 
-    // NEW: Create notifications for all users in the specified batch
     if (newAnnouncement) {
-      const usersInBatch = await Users.find({
-        batchCodes: newAnnouncement.batchCode,
-        isAdmin: false,
-        status: 'approved',
-      });
-
+      const usersInBatch = await Users.find({ batchCodes: newAnnouncement.batchCode, role: 'student', status: 'approved' });
       for (const user of usersInBatch) {
         await Notification.create({
           user: user._id,
           message: `New announcement: "${newAnnouncement.title}"`,
-          link: "/dashboard/announcements", // Link to the announcements page
+          link: "/dashboard/announcements",
           batchCode: newAnnouncement.batchCode,
           type: "new_announcement",
         });
       }
     }
 
-    return NextResponse.json(
-      { message: "Announcement created successfully", announcement: newAnnouncement },
-      { status: 201 }
-    );
+    return NextResponse.json({ message: "Announcement created successfully", announcement: newAnnouncement }, { status: 201 });
   } catch (error) {
     console.error("Error creating announcement:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to create announcement" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Failed to create announcement" }, { status: 500 });
   }
 }
 
-// GET method to fetch all announcements (admin view)
+// GET method to fetch announcements based on role and batches
 export async function GET(req) {
-  try {
-    const authResult = await verifyAdmin(req);
-    if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+    try {
+      const authResult = await verifyAdminOrMentor(req);
+      if (!authResult.success) return NextResponse.json({ error: authResult.error }, { status: 401 });
+  
+      await ConnectToDB();
+
+      let query = {};
+      // UPDATED: If the user is a mentor, fetch all announcements from their assigned batches
+      if (authResult.user.role === 'mentor') {
+          if (authResult.user.batchCodes && authResult.user.batchCodes.length > 0) {
+              query.batchCode = { $in: authResult.user.batchCodes };
+          } else {
+              return NextResponse.json({ announcements: [] }, { status: 200 });
+          }
+      }
+      
+      const announcements = await Announcement.find(query).sort({ createdAt: -1 });
+
+      // Fetch batch names
+      const batchCodes = announcements.map(announcement => announcement.batchCode);
+      const batches = await Batch1.find({ batchCode: { $in: batchCodes } }).select('batchCode batchName').lean();
+      const batchCodeToNameMap = batches.reduce((acc, batch) => {
+          acc[batch.batchCode] = batch.batchName;
+          return acc;
+      }, {});
+
+      // Add batchName to each announcement object
+      const announcementsWithBatchNames = announcements.map(announcement => ({
+          ...announcement.toObject(),
+          batchName: batchCodeToNameMap[announcement.batchCode] || 'Unknown Batch'
+      }));
+
+      return NextResponse.json({ announcements: announcementsWithBatchNames }, { status: 200 });
+    } catch (error) {
+      console.error("Error fetching announcements:", error);
+      return NextResponse.json({ error: "Failed to fetch announcements" }, { status: 500 });
     }
-
-    await ConnectToDB();
-
-    const { searchParams } = new URL(req.url);
-    const batchCodeFilter = searchParams.get('batchCode');
-
-    let query = {};
-    if (batchCodeFilter) {
-      query.batchCode = batchCodeFilter;
-    }
-
-    const announcements = await Announcement.find(query).sort({ createdAt: -1 });
-
-    return NextResponse.json({ announcements }, { status: 200 });
-  } catch (error) {
-    console.error("Error fetching announcements:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch announcements" },
-      { status: 500 }
-    );
-  }
 }
-
+  
 // PUT method to update an announcement
 export async function PUT(req) {
-  try {
-    const authResult = await verifyAdmin(req);
-    if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+    try {
+      const authResult = await verifyAdminOrMentor(req);
+      if (!authResult.success) return NextResponse.json({ error: authResult.error }, { status: 401 });
+  
+      const { _id, title, mentor, message, batchCode } = await req.json();
+      if (!_id || !title || !mentor || !message || !batchCode) {
+        return NextResponse.json({ error: "All fields are required for update" }, { status: 400 });
+      }
+  
+      await ConnectToDB();
+
+      const announcementToUpdate = await Announcement.findById(_id);
+      if (!announcementToUpdate) {
+        return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
+      }
+
+      if (authResult.user.role === 'mentor' && announcementToUpdate.createdBy.toString() !== authResult.user._id.toString()) {
+        return NextResponse.json({ error: "You do not have permission to edit this announcement." }, { status: 403 });
+      }
+
+      const updatedAnnouncement = await Announcement.findByIdAndUpdate(_id, { title, mentor, message, batchCode }, { new: true });
+  
+      return NextResponse.json({ message: "Announcement updated successfully", announcement: updatedAnnouncement }, { status: 200 });
+    } catch (error) {
+      console.error("Error updating announcement:", error);
+      return NextResponse.json({ error: "Failed to update announcement" }, { status: 500 });
     }
-
-    const { _id, title, mentor, message, batchCode } = await req.json();
-
-    if (!_id || !mongoose.Types.ObjectId.isValid(_id)) {
-      return NextResponse.json({ error: "Invalid announcement ID" }, { status: 400 });
-    }
-    if (!title || !mentor || !message || !batchCode) {
-        return NextResponse.json({ error: "All fields including batch code are required for update" }, { status: 400 });
-    }
-
-    await ConnectToDB();
-
-    const updatedAnnouncement = await Announcement.findByIdAndUpdate(
-      _id,
-      { title, mentor, message, batchCode, updatedAt: new Date() },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedAnnouncement) {
-      return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(
-      { message: "Announcement updated successfully", announcement: updatedAnnouncement },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("Error updating announcement:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to update announcement" },
-      { status: 500 }
-    );
-  }
 }
-
+  
 // DELETE method to delete an announcement
 export async function DELETE(req) {
-  try {
-    const authResult = await verifyAdmin(req);
-    if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+    try {
+      const authResult = await verifyAdminOrMentor(req);
+      if (!authResult.success) return NextResponse.json({ error: authResult.error }, { status: 401 });
+  
+      const { searchParams } = new URL(req.url);
+      const id = searchParams.get('id');
+      if (!id) return NextResponse.json({ error: "Announcement ID is required" }, { status: 400 });
+  
+      await ConnectToDB();
+
+      const announcementToDelete = await Announcement.findById(id);
+      if (!announcementToDelete) {
+        return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
+      }
+      
+      if (authResult.user.role === 'mentor' && announcementToDelete.createdBy.toString() !== authResult.user._id.toString()) {
+        return NextResponse.json({ error: "You do not have permission to delete this announcement." }, { status: 403 });
+      }
+
+      await Announcement.findByIdAndDelete(id);
+  
+      return NextResponse.json({ message: "Announcement deleted successfully" }, { status: 200 });
+    } catch (error) {
+      console.error("Error deleting announcement:", error);
+      return NextResponse.json({ error: "Failed to delete announcement" }, { status: 500 });
     }
-
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
-
-    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
-      return NextResponse.json({ error: "Announcement ID is required and must be valid" }, { status: 400 });
-    }
-
-    await ConnectToDB();
-
-    const deletedAnnouncement = await Announcement.findByIdAndDelete(id);
-
-    if (!deletedAnnouncement) {
-      return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
-    }
-
-    return NextResponse.json(
-      { message: "Announcement deleted successfully" },
-      { status: 200 }
-    );
-  } catch (error) {
-    console.error("Error deleting announcement:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to delete announcement" },
-      { status: 500 }
-    );
-  }
 }

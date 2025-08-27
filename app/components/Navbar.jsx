@@ -5,10 +5,97 @@ import { useRouter } from 'next/navigation';
 import React, { useState, useEffect } from "react";
 import NotificationIcon from "./NotificationIcon"; // Import the new component
 
+// New Sidebar component
+const Sidebar = ({ links, user, handleLogout, toggleMobileMenu }) => (
+  <div className="lg:hidden fixed top-0 left-0 w-64 h-full bg-white z-30 shadow-lg">
+    <div className="flex items-center justify-between px-4 py-4 border-b-4 border-primary">
+      <Link href={"/"} className="flex items-center gap-2">
+        <span>
+          <img src="/logo.svg" alt="" className="w-8" />
+        </span>{" "}
+        <h1 className="text-xl">SkillCrafters</h1>
+      </Link>
+      <button onClick={toggleMobileMenu}>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth="1.5"
+          stroke="currentColor"
+          className="size-7"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M6 18L18 6M6 6l12 12"
+          />
+        </svg>
+      </button>
+    </div>
+    <ul className="flex flex-col items-start p-4 gap-4">
+      {links.map((link, index) => (
+        <li key={index}>
+          <Link href={link.href} onClick={toggleMobileMenu}>{link.name}</Link>
+        </li>
+      ))}
+    </ul>
+    <div className="flex flex-col items-start p-4 gap-4 border-t">
+      {user ? (
+        <>
+          <div className="flex items-center gap-2">
+            <NotificationIcon />
+            <span>Notifications</span>
+          </div>
+          <Link
+            href="/profile"
+            className="flex items-center gap-2"
+            onClick={toggleMobileMenu}
+          >
+            <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            <span>{user.name}</span>
+          </Link>
+          <Link
+            href="/dashboard"
+            className="w-full text-left"
+            onClick={toggleMobileMenu}
+          >
+            Dashboard
+          </Link>
+          <button
+            onClick={() => {
+              toggleMobileMenu();
+              handleLogout();
+            }}
+            className="w-full text-left"
+          >
+            Logout
+          </button>
+        </>
+      ) : (
+        <>
+          <Link href={"/login"} className="w-full" onClick={toggleMobileMenu}>
+            Login
+          </Link>
+          <Link
+            href={"/signup"}
+            className="w-full"
+            onClick={toggleMobileMenu}
+          >
+            Sign up
+          </Link>
+        </>
+      )}
+    </div>
+  </div>
+);
+
 export default function Navbar() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -19,10 +106,7 @@ export default function Navbar() {
         if (res.ok && data.user) {
           setUser(data.user);
         } else {
-          // If not authenticated or error, clear user state
           setUser(null);
-          
-          // If token is expired or invalid, clear it
           if (data.error === 'Token expired' || data.error === 'Invalid token') {
             fetch('/api/auth/logout', { method: 'POST' });
           }
@@ -52,25 +136,18 @@ export default function Navbar() {
   };
 
   const links = [
-    {
-      name: "Home",
-      href: "/",
-    },
-    {
-      name: "Blogs",
-      href: "/blogs",
-    },
-    {
-      name: "Services",
-      href: "/services",
-    },
-    {
-      name: "About",
-      href: "/about",
-    },
+    { name: "Home", href: "/" },
+    { name: "Blogs", href: "/blogs" },
+    { name: "Services", href: "/services" },
+    { name: "About", href: "/about" },
   ];
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
   return (
-    <nav className="px-4 py-4 border-b-4 border-primary bg-white">
+    <nav className="px-4 py-4 border-b-4 border-primary bg-white relative">
       <div className="flex items-center justify-between container m-auto ">
         <Link href={"/"} className="flex items-center gap-2">
           <span>
@@ -79,20 +156,22 @@ export default function Navbar() {
           <h1 className="text-xl">SkillCrafters</h1>
         </Link>
         <div id="for-mobile" className="lg:hidden">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24"
-            strokeWidth="1.5"
-            stroke="currentColor"
-            className="size-7"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
-            />
-          </svg>
+          <button onClick={toggleMobileMenu}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="1.5"
+              stroke="currentColor"
+              className="size-7"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
+              />
+            </svg>
+          </button>
         </div>
         <div
           id="for-desktop"
@@ -165,6 +244,12 @@ export default function Navbar() {
           )}
         </div>
       </div>
+      {isMobileMenuOpen && (
+        <>
+          <div className="lg:hidden fixed top-0 left-0 w-full h-full bg-black opacity-50 z-20" onClick={toggleMobileMenu}></div>
+          <Sidebar links={links} user={user} handleLogout={handleLogout} toggleMobileMenu={toggleMobileMenu} />
+        </>
+      )}
     </nav>
   );
 }

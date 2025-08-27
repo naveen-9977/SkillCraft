@@ -1,63 +1,50 @@
 import mongoose from "mongoose";
 
 const liveClassSchema = new mongoose.Schema({
-  title: {
+  topic: {
     type: String,
-    required: [true, "Live class title is required"],
-    trim: true,
-    maxLength: [200, "Title cannot be more than 200 characters"]
+    required: true,
   },
   description: {
     type: String,
-    required: [true, "Live class description is required"],
-    trim: true,
-    maxLength: [1000, "Description cannot be more than 1000 characters"]
-  },
-  classLink: { // URL for the live class (e.g., Zoom, Google Meet link, or 'internal' for WebRTC)
-    type: String,
-    required: [true, "Class link is required"],
-    trim: true,
+    required: true,
   },
   mentor: {
-    type: String,
-    required: [true, "Mentor name is required"],
-    trim: true,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Users', // CORRECTED: Reference the Users collection
+    required: true,
+  },
+  batch: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'batch1', 
+    required: true,
   },
   startTime: {
     type: Date,
-    required: [true, "Start time is required"],
+    required: true,
   },
-  endTime: {
-    type: Date,
-    required: [true, "End time is required"],
+  classType: {
+    type: String,
+    enum: ['webrtc', 'external'],
+    default: 'external',
+    required: true,
   },
-  batchCodes: { // Array of batch codes this class is for
-    type: [String],
-    required: [true, "At least one batch code is required"],
-    validate: {
-      validator: function(v) {
-        return v && v.length > 0; // Ensure the array is not empty
-      },
-      message: 'At least one batch code is required for the live class.'
-    }
+  link: {
+    type: String,
+    required: function() {
+      return this.classType === 'external';
+    },
   },
-  isActive: { // To easily enable/disable a class
-    type: Boolean,
-    default: true
+  // NEW: Add a field to track the creator
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Users', // Reference to the Users model
+    required: true,
   },
   createdAt: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
-  updatedAt: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-liveClassSchema.pre('save', function(next) {
-  this.updatedAt = new Date();
-  next();
 });
 
 const LiveClass = mongoose.models.LiveClass || mongoose.model('LiveClass', liveClassSchema);

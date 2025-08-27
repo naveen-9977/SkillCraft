@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import ConnectToDB from "@/DB/ConnectToDB";
 import Announcement from "@/schema/Announcement";
 import Users from "@/schema/Users";
+import Batch1 from "@/schema/Batch1"; // Import Batch1 schema
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
@@ -69,7 +70,20 @@ export async function GET(req) {
     // NEW: Filter announcements by ANY of the authenticated student's batch codes
     const announcements = await Announcement.find({ batchCode: { $in: studentBatchCodes } }).sort({ createdAt: -1 });
 
-    return NextResponse.json({ announcements }, { status: 200 });
+    // Fetch batch names
+    const batches = await Batch1.find({ batchCode: { $in: studentBatchCodes } }).select('batchCode batchName').lean();
+    const batchCodeToNameMap = batches.reduce((acc, batch) => {
+        acc[batch.batchCode] = batch.batchName;
+        return acc;
+    }, {});
+    
+    // Add batchName to each announcement
+    const announcementsWithBatchNames = announcements.map(announcement => ({
+        ...announcement.toObject(),
+        batchName: batchCodeToNameMap[announcement.batchCode] || 'Unknown Batch'
+    }));
+
+    return NextResponse.json({ announcements: announcementsWithBatchNames }, { status: 200 });
   } catch (error) {
     console.error("Error fetching student announcements:", error);
     return NextResponse.json(

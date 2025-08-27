@@ -1,359 +1,266 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { MdDelete } from "react-icons/md";
-import { IoIosAdd } from "react-icons/io";
-import { HiOutlineChevronDown } from "react-icons/hi2";
+import React, { useEffect, useState, useMemo } from "react";
+import { Folder, File, Upload, Plus, Trash2, ArrowLeft, MoreVertical, Edit, Video, Image as ImageIcon } from 'lucide-react';
 
 export default function AdminStudyMaterialsPage() {
-  const [studyMaterials, setStudyMaterials] = useState([]);
+  const [user, setUser] = useState(null);
+  const [batches, setBatches] = useState([]);
+  const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    mentor: '',
-    // resourceUrl: '', // resourceUrl will now be managed by file upload or explicitly
-    resourceType: 'pdf', // Default type, can be changed
-    batchCode: '',
-  });
-  const [resourceFile, setResourceFile] = useState(null); // NEW state for the selected file
-  const [editingMaterialId, setEditingMaterialId] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [currentResourceUrl, setCurrentResourceUrl] = useState(''); // To display existing URL when editing
+  
+  // Navigation state
+  const [currentBatch, setCurrentBatch] = useState(null);
+  const [currentFolderId, setCurrentFolderId] = useState(null);
+  const [breadcrumbs, setBreadcrumbs] = useState([]);
 
+  // Modal states
+  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+  const [showUploadFileModal, setShowUploadFileModal] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [newFileName, setNewFileName] = useState('');
+  const [newFile, setNewFile] = useState(null);
+  
   useEffect(() => {
-    fetchStudyMaterials();
+    fetchData();
+    fetchUser();
   }, []);
 
-  const fetchStudyMaterials = async () => {
+  const fetchUser = async () => {
+    try {
+        const res = await fetch('/api/auth/user');
+        const data = await res.json();
+        if (res.ok) setUser(data.user);
+    } catch (e) {
+        console.error("Failed to fetch user", e);
+    }
+  };
+
+  const fetchData = async () => {
     setLoading(true);
     setError('');
     try {
       const res = await fetch("/api/admin/studymaterial");
       const data = await res.json();
       if (res.ok) {
-        setStudyMaterials(data.studyMaterials);
+        setBatches(data.batches);
+        setMaterials(data.materials);
       } else {
-        setError(data.error || "Failed to fetch study materials.");
+        setError(data.error || "Failed to fetch data.");
       }
     } catch (err) {
-      console.error("Error fetching study materials:", err);
-      setError("An error occurred while loading study materials.");
+      setError("An error occurred while loading data.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  // NEW: Handle file input change
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setResourceFile(e.target.files[0]);
-    } else {
-      setResourceFile(null);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSaving(true);
-    setError('');
-
-    // NEW: Use FormData for file uploads
-    const formToSend = new FormData();
-    formToSend.append('title', formData.title);
-    formToSend.append('mentor', formData.mentor);
-    formToSend.append('resourceType', formData.resourceType);
-    formToSend.append('batchCode', formData.batchCode);
-
-    if (resourceFile) {
-      formToSend.append('resourceFile', resourceFile); // Append the actual file
-    } else if (editingMaterialId && currentResourceUrl) {
-      // If no new file is selected during edit, send the existing URL
-      formToSend.append('resourceUrl', currentResourceUrl);
-    } else {
-      setError("Resource URL or a file is required.");
-      setIsSaving(false);
-      return;
-    }
-
+  const getFileExtension = (url) => {
+    if (!url) return null;
     try {
-      const url = editingMaterialId
-        ? `/api/admin/studymaterial` // PUT for update
-        : '/api/admin/studymaterial'; // POST for create
-
-      const method = editingMaterialId ? 'PUT' : 'POST';
-
-      // For FormData, do NOT set 'Content-Type': 'application/json'
-      // The browser will automatically set the correct 'Content-Type' header (multipart/form-data)
-      const res = await fetch(url, {
-        method,
-        body: formToSend, // Send FormData directly
-      });
-
-      if (res.ok) {
-        setShowForm(false);
-        setFormData({
-          title: '',
-          mentor: '',
-          resourceType: 'pdf',
-          batchCode: '',
-        });
-        setResourceFile(null); // Clear selected file
-        setCurrentResourceUrl(''); // Clear current URL
-        setEditingMaterialId(null);
-        fetchStudyMaterials(); // Re-fetch to update list
-      } else {
-        const data = await res.json();
-        setError(data.error || 'Failed to save study material.');
-      }
-    } catch (err) {
-      console.error("Error saving study material:", err);
-      setError("An error occurred while saving study material.");
-    } finally {
-      setIsSaving(false);
+        const urlParts = new URL(url, window.location.origin).pathname.split('.');
+        return urlParts.length > 1 ? urlParts.pop().toUpperCase() : null;
+    } catch (e) {
+        return null;
     }
   };
 
-  const handleEdit = (material) => {
-    setFormData({
-      title: material.title,
-      mentor: material.mentor,
-      resourceType: material.resourceType,
-      batchCode: material.batchCode,
-    });
-    setCurrentResourceUrl(material.resourceUrl); // Set existing URL for display
-    setResourceFile(null); // Clear any previously selected file
-    setEditingMaterialId(material._id);
-    setShowForm(true);
+  const FileTypeIcon = ({ url }) => {
+    const extension = getFileExtension(url);
+    switch (extension) {
+        case 'MP4': case 'MOV': return <Video className="w-16 h-16 text-red-400" />;
+        case 'JPG': case 'JPEG': case 'PNG': case 'GIF': return <ImageIcon className="w-16 h-16 text-green-400" />;
+        case 'PDF': return <File className="w-16 h-16 text-purple-400" />;
+        default: return <File className="w-16 h-16 text-gray-400" />;
+    }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this study material? This will also delete the associated file.')) {
-      return;
+  const { currentItems, currentPathName } = useMemo(() => {
+    if (!currentBatch) {
+      return { currentItems: batches, currentPathName: 'All Batches' };
     }
-    setLoading(true);
-    setError('');
+    const items = materials.filter(m => m.batchCode === currentBatch.batchCode && m.parent === currentFolderId);
+    const currentFolder = currentFolderId ? materials.find(m => m._id === currentFolderId) : null;
+    return {
+        currentItems: items.sort((a, b) => a.type === 'folder' ? -1 : 1),
+        currentPathName: currentFolder ? currentFolder.title : currentBatch.batchName
+    };
+  }, [currentBatch, currentFolderId, batches, materials]);
+
+  const handleBatchClick = (batch) => {
+    setCurrentBatch(batch);
+    setCurrentFolderId(null);
+    setBreadcrumbs([{ id: null, name: batch.batchName }]);
+  };
+
+  const handleFolderClick = (folder) => {
+    setCurrentFolderId(folder._id);
+    setBreadcrumbs(prev => [...prev, { id: folder._id, name: folder.title }]);
+  };
+
+  const handleBreadcrumbClick = (index) => {
+    if (index === -1) {
+        setCurrentBatch(null);
+        setCurrentFolderId(null);
+        setBreadcrumbs([]);
+    } else {
+        const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
+        setBreadcrumbs(newBreadcrumbs);
+        setCurrentFolderId(newBreadcrumbs[newBreadcrumbs.length - 1].id);
+    }
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName) return;
     try {
-      const res = await fetch(`/api/admin/studymaterial?id=${id}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        fetchStudyMaterials(); // Re-fetch to update list
-      } else {
-        const data = await res.json();
-        setError(data.error || 'Failed to delete study material.');
-      }
-    } catch (err) {
-      console.error("Error deleting study material:", err);
-      setError("An error occurred while deleting study material.");
-    } finally {
-      setLoading(false);
+        const formData = new FormData();
+        formData.append('type', 'folder');
+        formData.append('title', newFolderName);
+        formData.append('batchCode', currentBatch.batchCode);
+        if (currentFolderId) formData.append('parent', currentFolderId);
+
+        const res = await fetch('/api/admin/studymaterial', { method: 'POST', body: formData });
+        if (res.ok) {
+            setShowCreateFolderModal(false);
+            setNewFolderName('');
+            fetchData();
+        } else {
+            const data = await res.json();
+            alert(data.error || 'Failed to create folder');
+        }
+    } catch (e) {
+        alert('An error occurred.');
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+  const handleUploadFile = async () => {
+    if (!newFile) return;
+    try {
+        const formData = new FormData();
+        formData.append('type', 'file');
+        formData.append('title', newFileName || newFile.name);
+        formData.append('batchCode', currentBatch.batchCode);
+        if (currentFolderId) formData.append('parent', currentFolderId);
+        formData.append('resourceFile', newFile);
 
-  if (error && !showForm) { // Show global error if not in form view
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50">
-        <div className="text-red-600 mb-4">{error}</div>
-        <button
-          onClick={fetchStudyMaterials}
-          className="text-primary hover:underline mt-4"
-        >
-          Try Again
-        </button>
-      </div>
-    );
-  }
+        const res = await fetch('/api/admin/studymaterial', { method: 'POST', body: formData });
+        if (res.ok) {
+            setShowUploadFileModal(false);
+            setNewFileName('');
+            setNewFile(null);
+            fetchData();
+        } else {
+            const data = await res.json();
+            alert(data.error || 'Failed to upload file');
+        }
+    } catch (e) {
+        alert('An error occurred.');
+    }
+  };
+
+  const handleDelete = async (item) => {
+    if (!window.confirm(`Are you sure you want to delete "${item.title}"? This will also delete all its contents.`)) return;
+    try {
+        const res = await fetch(`/api/admin/studymaterial?id=${item._id}`, { method: 'DELETE' });
+        if (res.ok) {
+            fetchData();
+        } else {
+            const data = await res.json();
+            alert(data.error || 'Failed to delete.');
+        }
+    } catch (e) {
+        alert('An error occurred.');
+    }
+  };
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  if (error) return <div className="min-h-screen flex items-center justify-center text-red-500">{error}</div>;
 
   return (
-    <div className="bg-zinc-50 h-screen py-10 px-4 lg:px-10">
+    <div className="bg-zinc-50 min-h-screen p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-semibold">Study Material Management</h1>
-          <button
-            onClick={() => {
-              setShowForm(!showForm);
-              setEditingMaterialId(null);
-              setFormData({
-                title: '',
-                mentor: '',
-                resourceType: 'pdf',
-                batchCode: '',
-              });
-              setResourceFile(null); // Clear selected file on new form
-              setCurrentResourceUrl(''); // Clear current URL on new form
-            }}
-            className="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
-          >
-            {showForm ? 'Cancel' : 'Add New Material'}
-          </button>
-        </div>
-
-        {error && showForm && ( // Show form-specific error
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-            {error}
+        <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">Study Material</h1>
+            <div className="text-sm text-gray-500 breadcrumbs mt-2">
+                <span onClick={() => handleBreadcrumbClick(-1)} className="cursor-pointer hover:underline">Batches</span>
+                {breadcrumbs.map((crumb, index) => (
+                    <span key={index}>
+                        <span className="mx-2">/</span>
+                        <span onClick={() => handleBreadcrumbClick(index)} className="cursor-pointer hover:underline">{crumb.name}</span>
+                    </span>
+                ))}
+            </div>
           </div>
-        )}
-
-        {showForm && (
-          <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-sm mb-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Title
-              </label>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md focus:ring-primary focus:border-primary"
-                required
-              />
+          {currentBatch && (
+            <div className="flex gap-2 mt-4 sm:mt-0">
+                <button onClick={() => setShowCreateFolderModal(true)} className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-lg text-sm">
+                    <Folder size={16} /> Create Folder
+                </button>
+                <button onClick={() => setShowUploadFileModal(true)} className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg text-sm">
+                    <Upload size={16} /> Upload File
+                </button>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Mentor
-              </label>
-              <input
-                type="text"
-                name="mentor"
-                value={formData.mentor}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md focus:ring-primary focus:border-primary"
-                required
-              />
-            </div>
-            
-            {/* NEW: File input for resource */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Upload Resource File (PDF, Video, Document, etc.)
-              </label>
-              <input
-                type="file"
-                name="resourceFile"
-                onChange={handleFileChange}
-                className="w-full p-2 border rounded-md file:mr-4 file:py-2 file:px-4
-                           file:rounded-full file:border-0 file:text-sm file:font-semibold
-                           file:bg-primary file:text-white hover:file:bg-primary/90"
-              />
-              {resourceFile && (
-                <p className="text-sm text-gray-500 mt-1">Selected: {resourceFile.name}</p>
-              )}
-              {editingMaterialId && !resourceFile && currentResourceUrl && (
-                <p className="text-sm text-gray-500 mt-1">
-                  Current file: <a href={currentResourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">View Current File</a>
-                </p>
-              )}
-              {!resourceFile && !currentResourceUrl && !editingMaterialId && (
-                <p className="text-sm text-red-500 mt-1">A file is required for new materials.</p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Resource Type
-              </label>
-              <select
-                name="resourceType"
-                value={formData.resourceType}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md focus:ring-primary focus:border-primary"
-                required
-              >
-                <option value="pdf">PDF</option>
-                <option value="video">Video</option>
-                <option value="link">Link</option>
-                <option value="document">Document</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Batch Code
-              </label>
-              <input
-                type="text"
-                name="batchCode"
-                value={formData.batchCode}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md focus:ring-primary focus:border-primary"
-                required
-                placeholder="e.g., BATCH-2025-A"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-primary text-white py-2 px-4 rounded-md hover:bg-primary/90 transition-colors"
-              disabled={isSaving}
-            >
-              {isSaving ? 'Saving...' : (editingMaterialId ? 'Update Material' : 'Create Material')}
-            </button>
-          </form>
-        )}
-
-        <div className="grid gap-6">
-          {studyMaterials.length === 0 ? (
-            <div className="text-center text-gray-500 py-12 bg-white rounded-lg shadow-sm">
-              No study materials found. Add your first material!
-            </div>
-          ) : (
-            studyMaterials.map((material) => (
-              <div
-                key={material._id}
-                className="bg-white p-6 rounded-lg shadow-sm flex items-center justify-between"
-              >
-                <div>
-                  <h2 className="text-xl font-semibold">{material.title}</h2>
-                  <p className="text-gray-600 text-sm mt-1">Mentor: {material.mentor}</p>
-                  <p className="text-gray-600 text-sm">Type: {material.resourceType}</p>
-                  <p className="text-gray-600 text-sm">Batch: {material.batchCode}</p>
-                  <a
-                    href={material.resourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline text-sm mt-2 block"
-                  >
-                    View Resource
-                  </a>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => handleEdit(material)}
-                    className="text-primary hover:underline text-sm"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => handleDelete(material._id)}
-                    className="text-red-600 hover:underline text-sm"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))
           )}
-        </div>
+        </header>
+
+        <main className="bg-white p-4 rounded-xl shadow-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {currentItems.map(item => (
+              <div key={item._id} className="relative group">
+                <div 
+                    className="flex flex-col items-center justify-center p-4 border rounded-lg aspect-square cursor-pointer hover:bg-gray-50"
+                    onClick={() => item.type === 'folder' || !currentBatch ? (item.batchName ? handleBatchClick(item) : handleFolderClick(item)) : window.open(item.resourceUrl, '_blank')}
+                >
+                    {item.type === 'folder' || !currentBatch ? <Folder className="w-16 h-16 text-blue-400" /> : <FileTypeIcon url={item.resourceUrl} />}
+                    <span className="text-center text-sm mt-2 break-all">{item.batchName || item.title}</span>
+                    {item.type === 'file' && <span className="text-xs text-gray-400">{getFileExtension(item.resourceUrl)}</span>}
+                </div>
+                {currentBatch && (
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100">
+                        <button onClick={() => handleDelete(item)} className="p-1.5 bg-white rounded-full shadow hover:bg-red-50">
+                            <Trash2 size={16} className="text-red-500"/>
+                        </button>
+                    </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {currentItems.length === 0 && (
+            <div className="text-center py-16 text-gray-500">
+                This folder is empty.
+            </div>
+          )}
+        </main>
       </div>
+
+      {/* Modals */}
+      {showCreateFolderModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg w-full max-w-sm">
+                <h3 className="text-lg font-semibold mb-4">Create New Folder</h3>
+                <input type="text" value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="Folder Name" className="w-full p-2 border rounded-md mb-4"/>
+                <div className="flex justify-end gap-2">
+                    <button onClick={() => setShowCreateFolderModal(false)} className="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+                    <button onClick={handleCreateFolder} className="px-4 py-2 bg-blue-500 text-white rounded-lg">Create</button>
+                </div>
+            </div>
+        </div>
+      )}
+      {showUploadFileModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg w-full max-w-sm">
+                <h3 className="text-lg font-semibold mb-4">Upload File</h3>
+                <input type="file" onChange={e => setNewFile(e.target.files[0])} className="w-full p-2 border rounded-md mb-4"/>
+                <input type="text" value={newFileName} onChange={e => setNewFileName(e.target.value)} placeholder="Optional: Rename file" className="w-full p-2 border rounded-md mb-4"/>
+                <div className="flex justify-end gap-2">
+                    <button onClick={() => setShowUploadFileModal(false)} className="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+                    <button onClick={handleUploadFile} className="px-4 py-2 bg-green-500 text-white rounded-lg">Upload</button>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,155 @@
+.live-class-wrapper { 
+    display: flex; 
+    flex-direction: column; 
+    height: 100vh; 
+    background: #1e1e1e; 
+    color: white; 
+}
+
+.class-header { 
+    padding: 1rem; 
+    background: #252525; 
+    text-align: center; 
+    border-bottom: 1px solid #333; 
+}
+
+.class-header h1 { 
+    margin: 0; 
+    font-size: 1.25rem; 
+}
+
+.class-header p { 
+    margin: 0.25rem 0 0; 
+    color: #aaa; 
+}
+
+.video-main-content { 
+    flex-grow: 1; 
+    position: relative; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    padding: 1rem; 
+}
+
+.remote-videos-grid { 
+    display: grid; 
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+    gap: 1rem; 
+    width: 100%; 
+    height: 100%; 
+}
+
+.local-video-pip { 
+    position: absolute; 
+    bottom: 6rem; 
+    right: 1.5rem; 
+    width: 150px; 
+    height: auto; 
+    border: 2px solid #444; 
+    border-radius: 8px; 
+    overflow: hidden; 
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
+    transition: all 0.3s; 
+}
+
+.local-video-pip:hover { 
+    transform: scale(1.05); 
+}
+
+.local-video-pip video { 
+    width: 100%; 
+    height: 100%; 
+    object-fit: cover; 
+}
+
+.participant-name { 
+    position: absolute; 
+    bottom: 0; 
+    left: 0; 
+    background: rgba(0,0,0,0.6); 
+    padding: 0.25rem 0.5rem; 
+    font-size: 0.8rem; 
+    border-top-right-radius: 8px; 
+}
+
+.controls-bar { 
+    position: absolute; 
+    bottom: 0; 
+    left: 0; 
+    right: 0; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    padding: 1rem; 
+    background: #252525; 
+    border-top: 1px solid #333; 
+}
+
+.control-btn { 
+    background-color: #4a4a4a; 
+    color: white; 
+    border: none; 
+    width: 50px; 
+    height: 50px; 
+    margin: 0 0.5rem; 
+    border-radius: 50%; 
+    cursor: pointer; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    transition: background-color 0.2s; 
+}
+
+.control-btn:hover { 
+    background-color: #5a5a5a; 
+}
+
+.control-btn.active { 
+    background-color: #c13535; 
+}
+
+.control-btn.end-call { 
+    background-color: #c13535; 
+}
+
+.loading-container, 
+.error-container { 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh; 
+    background: #1e1e1e; 
+    color: #fff; 
+    font-size: 1.2rem; 
+}
+
+.loader { 
+    border: 4px solid #333; 
+    border-top: 4px solid #fff; 
+    border-radius: 50%; 
+    width: 40px; 
+    height: 40px; 
+    animation: spin 1s linear infinite; 
+}
+
+@keyframes spin { 
+    0% { transform: rotate(0deg); } 
+    100% { transform: rotate(360deg); } 
+}
+
+/* Styles for dynamically created remote video containers */
+.remote-video-container {
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.remote-video-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}

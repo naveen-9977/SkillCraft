@@ -1,359 +1,243 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import Link from "next/link"; 
-import { MdDelete } from "react-icons/md"; 
+import React, { useEffect, useState, useMemo } from "react";
+import { Folder, FileText, Upload, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 export default function AdminAssignmentsPage() {
-  const [assignments, setAssignments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    deadline: '',
-    batchCode: '', // NEW: Add batchCode to formData state
-  });
-  const [pdfFile, setPdfFile] = useState(null); 
-  const [editingAssignmentId, setEditingAssignmentId] = useState(null); 
+    const [user, setUser] = useState(null);
+    const [batches, setBatches] = useState([]);
+    const [assignments, setAssignments] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const router = useRouter();
 
-  useEffect(() => {
-    fetchAssignments();
-  }, []); 
+    const [currentBatch, setCurrentBatch] = useState(null);
+    const [currentFolderId, setCurrentFolderId] = useState(null);
+    const [breadcrumbs, setBreadcrumbs] = useState([]);
 
-  const fetchAssignments = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      // Admin fetching all assignments (can add ?batchCode=X if filtering is desired)
-      const res = await fetch("/api/admin/assignments"); 
-      const data = await res.json();
-      if (res.ok) {
-        setAssignments(data.assignments);
-      } else {
-        setError(data.error || "Failed to fetch assignments.");
-      }
-    } catch (err) {
-      console.error("Error fetching assignments:", err);
-      setError("An error occurred while loading assignments.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    const [showCreateFolderModal, setShowCreateFolderModal] = useState(false);
+    const [showUploadModal, setShowUploadModal] = useState(false);
+    const [newFolderName, setNewFolderName] = useState('');
+    const [newAssignmentData, setNewAssignmentData] = useState({ title: '', description: '', deadline: '', file: null });
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
+    useEffect(() => {
+        fetchData();
+        fetchUser();
+    }, []);
 
-  const handleFileChange = (e) => { 
-    if (e.target.files && e.target.files[0]) {
-      setPdfFile(e.target.files[0]);
-    } else {
-      setPdfFile(null);
-    }
-  };
+    const fetchUser = async () => {
+        try {
+            const res = await fetch('/api/auth/user');
+            const data = await res.json();
+            if (res.ok) setUser(data.user);
+        } catch (e) {
+            console.error("Failed to fetch user", e);
+        }
+    };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+    // CORRECTED: Added the 'async' keyword here
+    const fetchData = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const res = await fetch("/api/admin/assignments");
+            const data = await res.json();
+            if (res.ok) {
+                setBatches(data.batches);
+                setAssignments(data.assignments);
+            } else {
+                setError(data.error || "Failed to fetch data.");
+            }
+        } catch (err) {
+            setError("An error occurred while loading data.");
+        } finally {
+            setLoading(false);
+        }
+    };
+    
+    const { currentItems } = useMemo(() => {
+        if (!currentBatch) {
+            return { currentItems: batches };
+        }
+        const items = assignments.filter(a => a.batchCode === currentBatch.batchCode && a.parent === currentFolderId);
+        return { currentItems: items.sort((a, b) => a.type === 'folder' ? -1 : 1) };
+    }, [currentBatch, currentFolderId, batches, assignments]);
 
-    try {
-      // The current backend PUT method for assignments only supports updating submission scores.
-      // To update assignment details (title, description, deadline, batchCode),
-      // you would typically need a separate PUT route like /api/admin/assignments/[id]/route.js.
-      // For now, this form only supports creating new assignments.
-      const apiEndpoint = '/api/admin/assignments'; // POST only for creating
-      const method = 'POST'; // Always POST for new creation here
+    const handleItemClick = (item) => {
+        if (!currentBatch) {
+            setCurrentBatch(item);
+            setCurrentFolderId(null);
+            setBreadcrumbs([{ id: null, name: item.batchName }]);
+        } else if (item.type === 'folder') {
+            setCurrentFolderId(item._id);
+            setBreadcrumbs(prev => [...prev, { id: item._id, name: item.title }]);
+        } else {
+            router.push(`/admin/assignments/${item._id}/submissions`);
+        }
+    };
+    
+    const handleBreadcrumbClick = (index) => {
+        if (index === -1) {
+            setCurrentBatch(null);
+            setCurrentFolderId(null);
+            setBreadcrumbs([]);
+        } else {
+            const newBreadcrumbs = breadcrumbs.slice(0, index + 1);
+            setBreadcrumbs(newBreadcrumbs);
+            setCurrentFolderId(newBreadcrumbs[newBreadcrumbs.length - 1].id);
+        }
+    };
 
-      const formToSend = new FormData();
-      formToSend.append('title', formData.title);
-      formToSend.append('description', formData.description);
-      if (formData.deadline) {
-        formToSend.append('deadline', new Date(formData.deadline).toISOString());
-      }
-      formToSend.append('batchCode', formData.batchCode); // NEW: Append batchCode
-      if (pdfFile) {
-        formToSend.append('pdfFile', pdfFile); 
-      } 
+    const handleCreateFolder = async () => {
+        if (!newFolderName) return;
+        try {
+            const formData = new FormData();
+            formData.append('type', 'folder');
+            formData.append('title', newFolderName);
+            formData.append('batchCode', currentBatch.batchCode);
+            if (currentFolderId) formData.append('parent', currentFolderId);
 
-      const res = await fetch(apiEndpoint, {
-        method,
-        body: formToSend,
-      });
+            const res = await fetch('/api/admin/assignments', { method: 'POST', body: formData });
+            if (res.ok) {
+                setShowCreateFolderModal(false);
+                setNewFolderName('');
+                fetchData();
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Failed to create folder');
+            }
+        } catch (e) {
+            alert('An error occurred.');
+        }
+    };
 
-      if (res.ok) {
-        setShowForm(false);
-        setFormData({ title: '', description: '', deadline: '', batchCode: '' }); // Reset batchCode
-        setPdfFile(null); 
-        setEditingAssignmentId(null);
-        fetchAssignments(); 
-      } else {
-        const data = await res.json();
-        setError(data.error || 'Failed to save assignment');
-      }
-    } catch (error) {
-      console.error("Error saving assignment:", error);
-      setError('Error saving assignment. Check server logs.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    const handleDelete = async (item) => {
+        if (!window.confirm(`Are you sure you want to delete "${item.title}"? This will also delete all its contents and submissions.`)) return;
+        try {
+            const res = await fetch(`/api/admin/assignments?id=${item._id}`, { method: 'DELETE' });
+            if (res.ok) {
+                fetchData();
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Failed to delete.');
+            }
+        } catch (e) {
+            alert('An error occurred.');
+        }
+    };
 
-  // NOTE: Admin Assignment Editing (PUT) for title/description/deadline/batchCode
-  // is not fully implemented in the backend (app/api/admin/assignments/route.js only handles POST/GET/DELETE,
-  // while app/api/admin/assignments/[id]/submissions/route.js handles PUT for submissions).
-  // If full editing functionality for assignment details is needed, a PUT method would be added
-  // to app/api/admin/assignments/[id]/route.js.
-  const handleEdit = (assignment) => {
-    setFormData({
-      title: assignment.title,
-      description: assignment.description,
-      deadline: assignment.deadline ? assignment.deadline.substring(0, 10) : '',
-      batchCode: assignment.batchCode || '', // Populate batchCode for edit
-    });
-    setPdfFile(null); 
-    setEditingAssignmentId(assignment._id);
-    setShowForm(true);
-  };
+    const handleUploadAssignment = async () => {
+        if (!newAssignmentData.title || !newAssignmentData.description || !newAssignmentData.deadline || !newAssignmentData.file) {
+            alert("All fields are required.");
+            return;
+        }
+        try {
+            const formData = new FormData();
+            formData.append('type', 'file');
+            formData.append('title', newAssignmentData.title);
+            formData.append('description', newAssignmentData.description);
+            formData.append('deadline', newAssignmentData.deadline);
+            formData.append('batchCode', currentBatch.batchCode);
+            if (currentFolderId) formData.append('parent', currentFolderId);
+            formData.append('pdfFile', newAssignmentData.file);
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this assignment? This will also delete all student submissions and the associated PDF file.')) {
-      return;
-    }
+            const res = await fetch('/api/admin/assignments', { method: 'POST', body: formData });
+            if (res.ok) {
+                setShowUploadModal(false);
+                setNewAssignmentData({ title: '', description: '', deadline: '', file: null });
+                fetchData();
+            } else {
+                const data = await res.json();
+                alert(data.error || 'Failed to upload assignment');
+            }
+        } catch (e) {
+            alert('An error occurred.');
+        }
+    };
 
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`/api/admin/assignments?id=${id}`, { 
-        method: 'DELETE'
-      });
+    if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
-      if (res.ok) {
-        fetchAssignments();
-      } else {
-        const data = await res.json();
-        setError(data.error || 'Failed to delete assignment');
-      }
-    } catch (error) {
-      console.error("Error deleting assignment:", error);
-      setError('Error deleting assignment.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
-  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
+        <div className="bg-zinc-50 min-h-screen p-4 sm:p-6 lg:p-8">
+            <div className="max-w-7xl mx-auto">
+                <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-800">Assignments</h1>
+                        <div className="text-sm text-gray-500 breadcrumbs mt-2">
+                            <span onClick={() => handleBreadcrumbClick(-1)} className="cursor-pointer hover:underline">Batches</span>
+                            {breadcrumbs.map((crumb, index) => (
+                                <span key={index}> / <span onClick={() => handleBreadcrumbClick(index)} className="cursor-pointer hover:underline">{crumb.name}</span></span>
+                            ))}
+                        </div>
+                    </div>
+                    {currentBatch && (
+                        <div className="flex gap-2 mt-4 sm:mt-0">
+                            <button onClick={() => setShowCreateFolderModal(true)} className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-lg text-sm">
+                                <Folder size={16} /> Create Folder
+                            </button>
+                            <button onClick={() => setShowUploadModal(true)} className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg text-sm">
+                                <Upload size={16} /> New Assignment
+                            </button>
+                        </div>
+                    )}
+                </header>
 
-  if (error && !showForm) { // Only show global error if not in form view
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50">
-        <div className="text-red-600 mb-4">{error}</div>
-        <button
-          onClick={fetchAssignments}
-          className="text-primary hover:underline mt-4"
-        >
-          Try Again
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-zinc-50 min-h-screen py-10 px-4 lg:px-10">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-semibold">Assignment Management</h1>
-          <button
-            onClick={() => {
-              setShowForm(!showForm);
-              setEditingAssignmentId(null);
-              setFormData({ title: '', description: '', deadline: '', batchCode: '' }); // Reset batchCode
-              setPdfFile(null); 
-            }}
-            className="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
-          >
-            {showForm ? 'Cancel' : 'Create New Assignment'}
-          </button>
-        </div>
-
-        {error && showForm && ( // Show form-specific error
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-            {error}
-          </div>
-        )}
-
-        {showForm && (
-          <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-sm mb-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Title
-              </label>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md focus:ring-primary focus:border-primary"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
-              <textarea
-                name="description"
-                value={formData.description}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md focus:ring-primary focus:border-primary"
-                required
-                rows={3}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Batch Code
-              </label>
-              <input
-                type="text"
-                name="batchCode"
-                value={formData.batchCode}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md focus:ring-primary focus:border-primary"
-                required
-                placeholder="e.g., BATCH-2025-A"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Deadline Date
-              </label>
-              <input
-                type="date"
-                name="deadline"
-                value={formData.deadline}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md focus:ring-primary focus:border-primary"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Upload Assignment PDF (Optional)
-              </label>
-              <input
-                type="file"
-                name="pdfFile"
-                accept=".pdf" 
-                onChange={handleFileChange}
-                className="w-full p-2 border rounded-md file:mr-4 file:py-2 file:px-4
-                           file:rounded-full file:border-0 file:text-sm file:font-semibold
-                           file:bg-primary file:text-white hover:file:bg-primary/90"
-              />
-              {editingAssignmentId && !pdfFile && (
-                <p className="text-sm text-gray-500 mt-1">
-                  Leave empty to keep current file.
-                  {formData.resourceUrl && ( // Assuming resourceUrl exists on formData when editing
-                    <a href={formData.resourceUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline ml-1">
-                      (Current: View File)
-                    </a>
-                  )}
-                </p>
-              )}
+                <main className="bg-white p-4 rounded-xl shadow-sm">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {currentItems.map(item => (
+                            <div key={item._id} className="relative group">
+                                <div
+                                    className="flex flex-col items-center justify-center p-4 border rounded-lg aspect-square cursor-pointer hover:bg-gray-50"
+                                    onClick={() => handleItemClick(item)}
+                                >
+                                    {item.type === 'folder' || !currentBatch ? <Folder className="w-16 h-16 text-yellow-400" /> : <FileText className="w-16 h-16 text-indigo-400" />}
+                                    <span className="text-center text-sm mt-2 break-all">{item.batchName || item.title}</span>
+                                </div>
+                                {currentBatch && (
+                                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100">
+                                        <button onClick={() => handleDelete(item)} className="p-1.5 bg-white rounded-full shadow hover:bg-red-50">
+                                            <Trash2 size={16} className="text-red-500" />
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                    {currentItems.length === 0 && <div className="text-center py-16 text-gray-500">This folder is empty.</div>}
+                </main>
             </div>
 
-            <button
-              type="submit"
-              className="w-full bg-primary text-white py-2 px-4 rounded-md hover:bg-primary/90 transition-colors"
-              disabled={loading}
-            >
-              {loading ? 'Saving...' : (editingAssignmentId ? 'Update Assignment' : 'Create Assignment')}
-            </button>
-          </form>
-        )}
-
-        <div className="grid gap-6">
-          {assignments.length === 0 ? (
-            <div className="text-center text-gray-500 py-12 bg-white rounded-lg shadow-sm">
-              No assignments found. Create your first assignment!
-            </div>
-          ) : (
-            assignments.map(assignment => (
-              <div 
-                key={assignment._id} 
-                className="bg-white p-6 rounded-lg shadow-sm"
-              >
-                <h2 className="text-xl font-semibold mb-2">{assignment.title}</h2>
-                <p className="text-gray-600 mb-3">{assignment.description}</p>
-                {assignment.resourceUrl && ( 
-                  <p className="text-sm mb-3">
-                    <a 
-                      href={assignment.resourceUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="text-blue-600 hover:underline"
-                    >
-                      View Assignment PDF
-                    </a>
-                  </p>
-                )}
-                <p className="text-sm text-gray-500">
-                  Deadline: {formatDate(assignment.deadline)}
-                </p>
-                <p className="text-sm text-gray-700 mt-2">
-                  Batch Code: <span className="font-medium">{assignment.batchCode}</span> {/* NEW: Display batchCode */}
-                </p>
-                <p className="text-sm text-gray-700 mt-2">
-                  Submissions: <span className="font-medium">{assignment.submissionCount}</span>
-                </p>
-
-                <div className="flex justify-between items-center mt-4">
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => handleEdit(assignment)}
-                      className="text-primary hover:underline text-sm"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(assignment._id)}
-                      className="text-red-600 hover:underline text-sm"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                  <Link 
-                    href={`/admin/assignments/${assignment._id}/submissions`}
-                    className="bg-blue-600 text-white px-3 py-1 rounded-md hover:bg-blue-700 transition-colors text-sm"
-                  >
-                    View Submissions
-                  </Link>
+            {showCreateFolderModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg w-full max-w-sm">
+                        <h3 className="text-lg font-semibold mb-4">Create New Folder</h3>
+                        <input type="text" value={newFolderName} onChange={e => setNewFolderName(e.target.value)} placeholder="Folder Name" className="w-full p-2 border rounded-md mb-4" />
+                        <div className="flex justify-end gap-2">
+                            <button onClick={() => setShowCreateFolderModal(false)} className="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+                            <button onClick={handleCreateFolder} className="px-4 py-2 bg-blue-500 text-white rounded-lg">Create</button>
+                        </div>
+                    </div>
                 </div>
-              </div>
-            ))
-          )}
+            )}
+            
+            {showUploadModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-white p-6 rounded-lg w-full max-w-md">
+                        <h3 className="text-lg font-semibold mb-4">New Assignment</h3>
+                        <div className="space-y-4">
+                            <input type="text" value={newAssignmentData.title} onChange={e => setNewAssignmentData(p => ({ ...p, title: e.target.value }))} placeholder="Assignment Title" className="w-full p-2 border rounded-md" />
+                            <textarea value={newAssignmentData.description} onChange={e => setNewAssignmentData(p => ({ ...p, description: e.target.value }))} placeholder="Description" className="w-full p-2 border rounded-md" rows="3"></textarea>
+                            <input type="date" value={newAssignmentData.deadline} onChange={e => setNewAssignmentData(p => ({ ...p, deadline: e.target.value }))} className="w-full p-2 border rounded-md" />
+                            <input type="file" onChange={e => setNewAssignmentData(p => ({ ...p, file: e.target.files[0] }))} className="w-full p-2 border rounded-md" />
+                        </div>
+                        <div className="flex justify-end gap-2 mt-6">
+                            <button onClick={() => setShowUploadModal(false)} className="px-4 py-2 bg-gray-200 rounded-lg">Cancel</button>
+                            <button onClick={handleUploadAssignment} className="px-4 py-2 bg-green-500 text-white rounded-lg">Upload</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
-      </div>
-    </div>
-);
+    );
 }

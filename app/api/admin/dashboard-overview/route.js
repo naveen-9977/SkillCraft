@@ -8,6 +8,7 @@ import StudyMaterial from "@/schema/StudyMaterial";
 import Announcement from "@/schema/Announcement";
 import Submission from "@/schema/Submission";
 import TestResult from "@/schema/TestResult";
+import LiveClass from "@/schema/LiveClass";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 
@@ -22,9 +23,10 @@ async function verifyAdmin(req) {
     }
 
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
-    const user = await Users.findById(decoded.userId).select('-password');
+    await ConnectToDB();
+    const user = await Users.findById(decoded.userId).select('role');
 
-    if (!user || !user.isAdmin) {
+    if (!user || user.role !== 'admin') {
       return { success: false, error: 'Unauthorized access' };
     }
 
@@ -46,38 +48,26 @@ export async function GET(req) {
 
     await ConnectToDB();
 
-    const totalUsers = await Users.countDocuments({});
-    const totalAdmins = await Users.countDocuments({ isAdmin: true });
-    const totalStudents = totalUsers - totalAdmins;
-    const pendingStudents = await Users.countDocuments({ status: 'pending', isAdmin: false });
-    const approvedStudents = await Users.countDocuments({ status: 'approved', isAdmin: false });
-
+    // Correctly count all pending users (students and mentors)
+    const totalPendingUsers = await Users.countDocuments({ status: 'pending', role: { $in: ['student', 'mentor'] } });
+    const totalMentors = await Users.countDocuments({ role: 'mentor' });
+    const approvedStudents = await Users.countDocuments({ status: 'approved', role: 'student' });
+    
     const totalBatches = await Batch1.countDocuments({});
     const totalTests = await Test.countDocuments({});
     const totalAssignments = await Assignment.countDocuments({});
-    const totalStudyMaterials = await StudyMaterial.countDocuments({});
-    const totalAnnouncements = await Announcement.countDocuments({});
-
-    const totalSubmissions = await Submission.countDocuments({});
-    const totalTestResults = await TestResult.countDocuments({});
-
-    // You can add more specific stats if needed, e.g., submissions per assignment, average scores etc.
+    const totalLiveClasses = await LiveClass.countDocuments({});
 
     return NextResponse.json(
       {
         stats: {
-          totalUsers,
-          totalStudents,
-          totalAdmins,
-          pendingStudents,
+          totalMentors,
           approvedStudents,
+          totalPendingUsers, // Use the corrected count
           totalBatches,
           totalTests,
           totalAssignments,
-          totalStudyMaterials,
-          totalAnnouncements,
-          totalSubmissions,
-          totalTestResults,
+          totalLiveClasses,
         },
       },
       { status: 200 }

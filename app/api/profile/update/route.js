@@ -7,7 +7,7 @@ import Users from "@/schema/Users";
 
 export async function PUT(req) {
   try {
-    // Get the token
+    // Get the token from cookies
     const cookieStore = cookies();
     const token = cookieStore.get("token");
 
@@ -18,7 +18,7 @@ export async function PUT(req) {
       );
     }
 
-    // Verify token
+    // Verify the token to get the user's ID
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
     if (!decoded || !decoded.userId) {
       return NextResponse.json(
@@ -27,13 +27,13 @@ export async function PUT(req) {
       );
     }
 
-    // Get request body
+    // Get the request body
     const { name, email, currentPassword, newPassword, confirmPassword } = await req.json();
 
-    // Connect to database
+    // Connect to the database
     await ConnectToDB();
 
-    // Get user
+    // Find the user in the database
     const user = await Users.findById(decoded.userId);
     if (!user) {
       return NextResponse.json(
@@ -42,8 +42,8 @@ export async function PUT(req) {
       );
     }
 
-    // Check if email is taken by another user
-    if (email !== user.email) {
+    // If the email is being changed, check if the new email is already taken
+    if (email && email !== user.email) {
       const existingUser = await Users.findOne({ email });
       if (existingUser) {
         return NextResponse.json(
@@ -53,13 +53,13 @@ export async function PUT(req) {
       }
     }
 
-    // Update basic info
-    user.name = name;
-    user.email = email;
+    // Update basic user information
+    user.name = name || user.name;
+    user.email = email || user.email;
 
-    // Handle password change if requested
-    if (currentPassword && newPassword) {
-      // Verify current password
+    // Handle password change if all required fields are provided
+    if (currentPassword && newPassword && confirmPassword) {
+      // Verify the user's current password
       const isValidPassword = await bcrypt.compare(currentPassword, user.password);
       if (!isValidPassword) {
         return NextResponse.json(
@@ -68,7 +68,7 @@ export async function PUT(req) {
         );
       }
 
-      // Validate new password
+      // Validate that the new passwords match
       if (newPassword !== confirmPassword) {
         return NextResponse.json(
           { error: "New passwords do not match" },
@@ -76,21 +76,22 @@ export async function PUT(req) {
         );
       }
 
-      // Hash and set new password
+      // Hash and set the new password
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       user.password = hashedPassword;
     }
 
-    // Save changes
+    // Save the updated user document
     await user.save();
 
+    // Return a success response with the updated user info
     return NextResponse.json({
       message: "Profile updated successfully",
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
-        isAdmin: user.isAdmin
+        role: user.role // UPDATED: Return 'role' instead of 'isAdmin'
       }
     });
 

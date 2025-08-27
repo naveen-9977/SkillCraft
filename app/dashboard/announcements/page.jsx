@@ -73,7 +73,7 @@ export default function AnnouncementsPage() {
               <div className="">
                 <h4 className="text-base font-medium">{item.title}</h4>
                 <p className="text-zinc-500 text-sm mt-1">by {item.mentor}</p>
-                <p className="text-zinc-500 text-xs mt-1">Batch: {item.batchCode}</p>
+                <p className="text-zinc-500 text-xs mt-1">Batch: {item.batchName}</p>
                 <p className="mt-4">{item.message}</p>
               </div>
             </div>

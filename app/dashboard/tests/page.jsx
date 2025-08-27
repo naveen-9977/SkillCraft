@@ -3,7 +3,6 @@
 import Link from "next/link";
 import React, { useState, useEffect } from "react";
 import { useRouter } from 'next/navigation';
-// Import icons from lucide-react
 import { CalendarClock, Package, CheckCircle2, Circle, XCircle, ArrowRight, AlertTriangle, ClipboardX } from 'lucide-react';
 
 export default function Tests() {
@@ -22,20 +21,20 @@ export default function Tests() {
       setLoading(true);
       setError('');
 
-      // Fetch tests
+      // Fetch tests available for the student's batches
       const testsRes = await fetch('/api/tests');
       const testsData = await testsRes.json();
       if (!testsRes.ok) {
-        if (testsRes.status === 401) router.push('/login');
+        if (testsRes.status === 401 || testsRes.status === 403) router.push('/login');
         throw new Error(testsData.error || 'Failed to fetch tests');
       }
       setTests(testsData.tests);
 
-      // Fetch results
+      // Fetch the student's past results to determine which tests are completed
       const resultsRes = await fetch('/api/test-results');
       const resultsData = await resultsRes.json();
       if (!resultsRes.ok) {
-         if (resultsRes.status === 401) router.push('/login');
+         if (resultsRes.status === 401 || resultsRes.status === 403) router.push('/login');
         throw new Error(resultsData.error || 'Failed to fetch results');
       }
       setUserTestResults(resultsData.testResults);
@@ -51,7 +50,6 @@ export default function Tests() {
   const hasUserTakenTest = (testId) => userTestResults.some(result => result.test?._id === testId);
   const isDeadlinePassed = (deadline) => deadline && new Date() > new Date(deadline);
 
-  // Loading State
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 text-gray-600">
@@ -61,7 +59,6 @@ export default function Tests() {
     );
   }
 
-  // Error State
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -69,7 +66,7 @@ export default function Tests() {
             <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
                 <div className="flex items-center justify-center">
                     <AlertTriangle className="h-6 w-6 mr-3" />
-                    <p className="font-bold">Error: {error}</p>
+                    <p className="font-bold">{error}</p>
                 </div>
             </div>
             <button
@@ -91,14 +88,12 @@ export default function Tests() {
         </h1>
 
         {tests.length === 0 ? (
-          // Empty State
           <div className="text-center text-gray-500 mt-16 flex flex-col items-center">
             <ClipboardX className="h-16 w-16 text-gray-400 mb-4" />
             <h2 className="text-xl font-semibold text-gray-700">No Tests Found</h2>
             <p className="mt-2">There are no tests available for your batch at the moment.</p>
           </div>
         ) : (
-          // Grid layout for test cards
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {tests.map((test) => {
               const taken = hasUserTakenTest(test._id);
@@ -112,10 +107,8 @@ export default function Tests() {
               }
               
               return (
-                // Test Card
                 <div key={test._id} className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 flex flex-col">
                   <div className="p-6 flex-grow flex flex-col">
-                    {/* Status Badge */}
                     <div className={`inline-flex items-center gap-2 self-start px-2.5 py-0.5 rounded-full text-sm font-medium ${status.bgColor} ${status.color}`}>
                       <status.Icon className="h-4 w-4" />
                       {status.text}
@@ -124,11 +117,10 @@ export default function Tests() {
                     <h2 className="mt-4 text-xl font-semibold text-gray-900">{test.title}</h2>
                     <p className="mt-2 text-gray-600 text-sm flex-grow">{test.description}</p>
                     
-                    {/* Metadata Section */}
                     <div className="mt-6 pt-4 border-t border-gray-200 space-y-2 text-sm text-gray-500">
                       <div className="flex items-center gap-2">
                         <Package className="h-4 w-4" />
-                        <span>Batch: <span className="font-medium text-gray-700">{test.batchCode}</span></span>
+                        <span>Batch: <span className="font-medium text-gray-700">{test.batchName}</span></span>
                       </div>
                        {test.deadline && (
                          <div className={`flex items-center gap-2 ${isDeadlinePassed(test.deadline) && !taken ? 'text-red-600' : ''}`}>
@@ -139,7 +131,6 @@ export default function Tests() {
                     </div>
                   </div>
 
-                  {/* Action Button Footer */}
                   <div className="bg-gray-50 p-4 rounded-b-lg">
                     {taken ? (
                       <Link href={`/dashboard/tests/${test._id}?view=history`} className="flex items-center justify-center gap-2 w-full bg-green-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-700 transition-colors">

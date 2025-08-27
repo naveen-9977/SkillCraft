@@ -1,0 +1,156 @@
+/* Main wrapper for the entire page */
+.live-class-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: #121212; /* Dark background */
+    color: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Header section */
+.live-class-header {
+    padding: 1rem;
+    background-color: #1a1a1a;
+    text-align: center;
+    border-bottom: 1px solid #2a2a2a;
+    flex-shrink: 0;
+}
+
+.live-class-header h1 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.live-class-header p {
+    margin: 0.25rem 0 0;
+    color: #a0a0a0;
+}
+
+/* Main content area for videos */
+.video-grid-container {
+    flex-grow: 1;
+    padding: 1rem;
+    display: grid;
+    gap: 1rem;
+    /* Responsive grid that adjusts columns based on container width */
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+}
+
+/* Container for each participant's video */
+.participant-video {
+    position: relative;
+    background-color: #000;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+    min-height: 200px;
+}
+
+.participant-video video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Name tag overlay on video */
+.participant-name-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 0.3rem 0.6rem;
+    margin: 0.5rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* Picture-in-picture for the local user's video */
+.local-video-pip {
+    position: fixed;
+    bottom: 6rem; /* Position above the control bar */
+    right: 1.5rem;
+    width: 200px;
+    height: auto;
+    border: 3px solid #4f46e5;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.7);
+    transition: transform 0.3s ease;
+    z-index: 100;
+}
+
+.local-video-pip:hover {
+    transform: scale(1.05);
+}
+
+/* Floating control bar at the bottom */
+.controls-bar-floating {
+    position: fixed;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 0.75rem;
+    background-color: rgba(42, 42, 42, 0.8);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 9999px; /* Pill shape */
+    z-index: 100;
+}
+
+/* Individual control buttons */
+.control-btn {
+    background-color: #3a3a3a;
+    color: white;
+    border: none;
+    width: 50px;
+    height: 50px;
+    margin: 0 0.5rem;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.control-btn:hover {
+    background-color: #4a4a4a;
+    transform: translateY(-2px);
+}
+
+.control-btn.active, .control-btn.end-call {
+    background-color: #e53e3e; /* Red for active/end states */
+}
+
+.control-btn.end-call:hover {
+    background-color: #c53030;
+}
+
+/* Loading and error states */
+.status-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    font-size: 1.2rem;
+}
+
+.loader {
+    border: 4px solid #333;
+    border-top: 4px solid #4f46e5; /* Accent color */
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

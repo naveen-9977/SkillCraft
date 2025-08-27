@@ -1,37 +1,15 @@
 "use client"
 
 import { useRouter } from "next/navigation";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
+import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-    const [user, setUser] = useState(null)
-  
-
   const router = useRouter();
-
-  const fetchUser = async(req, res)=>{
-    let user = await fetch("/api/auth/user")
-    let data = await user.json()
-    console.log(data.user)
-    if(data.user){
-      router.replace('/')
-    }
-    setUser(data.user)
-  }
-
-  const handleEmailChange = (e) => {
-    setEmail(e.target.value);
-    setError("");
-  };
-
-  const handlePasswordChange = (e) => {
-    setPassword(e.target.value);
-    setError("");
-  };
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -50,9 +28,11 @@ export default function LoginPage() {
       const data = await res.json();
 
       if (res.ok) {
-        // Redirect based on user role
-        if (data.user.isAdmin) {
+        // Redirect based on the user's role
+        if (data.user.role === 'admin') {
           router.replace("/admin");
+        } else if (data.user.role === 'mentor') {
+          router.replace("/mentor"); // <-- Redirects mentors here
         } else {
           router.replace("/dashboard");
         }
@@ -67,10 +47,6 @@ export default function LoginPage() {
     }
   }
 
-   useEffect(() => {
-      fetchUser()
-    },[])
-
   return (
     <div className="container m-auto px-4">
       <div className="min-h-screen flex flex-col justify-center md:w-[50vw] lg:w-[40vw] xl:w-[25vw] m-auto">
@@ -81,29 +57,24 @@ export default function LoginPage() {
               <span className="block sm:inline">{error}</span>
             </div>
           )}
-          <label htmlFor="email" className="block mb-2">
-            Email Address
-          </label>
+          <label htmlFor="email" className="block mb-2">Email Address</label>
           <input
             type="email"
             className="ring-1 ring-[#D2D2D2] py-[5px] px-2 w-full rounded focus:outline-1 outline-[#393636] mb-6"
             id="email"
             value={email}
-            onChange={handleEmailChange}
+            onChange={(e) => setEmail(e.target.value)}
             required
           />
-          <label htmlFor="password" className="block mb-2">
-            Password
-          </label>
+          <label htmlFor="password" className="block mb-2">Password</label>
           <input
             type="password"
             className="ring-1 ring-[#D2D2D2] py-[5px] px-2 w-full rounded focus:outline-1 outline-[#393636] mb-2"
             id="password"
             value={password}
-            onChange={handlePasswordChange}
+            onChange={(e) => setPassword(e.target.value)}
             required
           />
-          {/* <span className="self-end text-primary mb-6 cursor-pointer hover:underline">Forgot password?</span> */}
           <button 
             type="submit" 
             className="bg-primary text-white py-2 rounded mb-6 disabled:opacity-50"
@@ -112,15 +83,16 @@ export default function LoginPage() {
             {isLoading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
-        <p className="text-center">
-          Don't have an account?{' '}
-          <span 
-            onClick={() => router.push('/signup')} 
-            className="text-primary hover:underline cursor-pointer"
-          >
-            Sign up
-          </span>
-        </p>
+        <div className="text-center space-y-2">
+            <p>
+              Don't have an account?{' '}
+              <Link href="/signup" className="text-primary hover:underline">Sign up as a Student</Link>
+            </p>
+            <p>
+              Are you a mentor?{' '}
+              <Link href="/mentor-signup" className="text-primary hover:underline">Register here</Link>
+            </p>
+        </div>
       </div>
     </div>
   );

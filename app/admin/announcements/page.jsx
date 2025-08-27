@@ -1,12 +1,17 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { MdDelete } from "react-icons/md";
-import { IoIosAdd } from "react-icons/io";
-import { HiOutlineChevronDown } from "react-icons/hi2";
+import '../styles/AdminAnnouncements.css'; // New CSS file for styling
+
+// Icons for the UI
+const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>;
+const IconEdit = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
+const IconDelete = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>;
+const IconX = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>;
 
 export default function AdminAnnouncementsPage() {
   const [announcements, setAnnouncements] = useState([]);
+  const [batches, setBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -20,24 +25,34 @@ export default function AdminAnnouncementsPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    fetchAnnouncements();
+    fetchAnnouncementsAndBatches();
   }, []);
 
-  const fetchAnnouncements = async () => {
+  const fetchAnnouncementsAndBatches = async () => {
     setLoading(true);
     setError('');
     try {
-      // Admin fetching all announcements (can add ?batchCode=X if filtering is desired)
-      const res = await fetch("/api/admin/announcements");
-      const data = await res.json();
-      if (res.ok) {
-        setAnnouncements(data.announcements);
+      const [announcementsRes, batchesRes] = await Promise.all([
+        fetch("/api/admin/announcements"),
+        fetch("/api/admin/batches")
+      ]);
+      
+      const announcementsData = await announcementsRes.json();
+      if (announcementsRes.ok) {
+        setAnnouncements(announcementsData.announcements);
       } else {
-        setError(data.error || "Failed to fetch announcements.");
+        setError(announcementsData.error || "Failed to fetch announcements.");
+      }
+
+      const batchesData = await batchesRes.json();
+      if (batchesRes.ok) {
+        setBatches(batchesData.batches);
+      } else {
+        setError(prev => prev + (batchesData.error || " Failed to fetch batches."));
       }
     } catch (err) {
-      console.error("Error fetching announcements:", err);
-      setError("An error occurred while loading announcements.");
+      console.error("Error fetching data:", err);
+      setError("An error occurred while loading data.");
     } finally {
       setLoading(false);
     }
@@ -45,10 +60,7 @@ export default function AdminAnnouncementsPage() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -57,38 +69,26 @@ export default function AdminAnnouncementsPage() {
     setError('');
 
     try {
-      const url = editingAnnouncementId
-        ? `/api/admin/announcements` // PUT for update
-        : '/api/admin/announcements'; // POST for create
-
+      const url = editingAnnouncementId ? `/api/admin/announcements` : '/api/admin/announcements';
       const method = editingAnnouncementId ? 'PUT' : 'POST';
-
       const dataToSend = editingAnnouncementId ? { _id: editingAnnouncementId, ...formData } : formData;
 
       const res = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataToSend)
       });
 
       if (res.ok) {
         setShowForm(false);
-        setFormData({
-          title: '',
-          mentor: '',
-          message: '',
-          batchCode: '',
-        });
+        setFormData({ title: '', mentor: '', message: '', batchCode: '' });
         setEditingAnnouncementId(null);
-        fetchAnnouncements(); // Re-fetch to update list
+        await fetchAnnouncementsAndBatches();
       } else {
         const data = await res.json();
         setError(data.error || 'Failed to save announcement.');
       }
     } catch (err) {
-      console.error("Error saving announcement:", err);
       setError("An error occurred while saving announcement.");
     } finally {
       setIsSaving(false);
@@ -107,184 +107,104 @@ export default function AdminAnnouncementsPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this announcement?')) {
-      return;
-    }
-    setLoading(true);
-    setError('');
+    if (!window.confirm('Are you sure you want to delete this announcement?')) return;
+    
     try {
-      const res = await fetch(`/api/admin/announcements?id=${id}`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(`/api/admin/announcements?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
-        fetchAnnouncements(); // Re-fetch to update list
+        await fetchAnnouncementsAndBatches();
       } else {
         const data = await res.json();
         setError(data.error || 'Failed to delete announcement.');
       }
     } catch (err) {
-      console.error("Error deleting announcement:", err);
       setError("An error occurred while deleting announcement.");
-    } finally {
-      setLoading(false);
     }
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-      </div>
-    );
-  }
-
-  if (error && !showForm) { // Show global error if not in form view
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50">
-        <div className="text-red-600 mb-4">{error}</div>
-        <button
-          onClick={fetchAnnouncements}
-          className="text-primary hover:underline mt-4"
-        >
-          Try Again
-        </button>
-      </div>
-    );
+    return <div className="loading-container"><div className="loader"></div></div>;
   }
 
   return (
-    <div className="bg-zinc-50 py-10 px-4 lg:px-10">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-semibold">Announcement Management</h1>
-          <button
-            onClick={() => {
-              setShowForm(!showForm);
-              setEditingAnnouncementId(null);
-              setFormData({
-                title: '',
-                mentor: '',
-                message: '',
-                batchCode: '',
-              });
-            }}
-            className="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary/90 transition-colors"
-          >
-            {showForm ? 'Cancel' : 'Add New Announcement'}
-          </button>
+    <div className="admin-announcements-container">
+      <header className="announcements-header">
+        <div>
+          <h1 className="announcements-title">Announcements</h1>
+          <p className="announcements-subtitle">Create and manage announcements for batches.</p>
         </div>
+        <button onClick={() => { setShowForm(true); setEditingAnnouncementId(null); setFormData({ title: '', mentor: '', message: '', batchCode: '' }); }} className="create-announcement-btn">
+          <IconPlus />
+          New Announcement
+        </button>
+      </header>
 
-        {error && showForm && ( // Show form-specific error
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-            {error}
+      {error && !showForm && <div className="error-message">{error}</div>}
+
+      {showForm && (
+        <div className="modal-backdrop">
+          <div className="modal-content">
+            <div className="modal-header">
+              <h2 className="modal-title">{editingAnnouncementId ? 'Edit Announcement' : 'Create New Announcement'}</h2>
+              <button onClick={() => setShowForm(false)} className="close-btn"><IconX /></button>
+            </div>
+            {error && showForm && <div className="error-message modal-error">{error}</div>}
+            <form onSubmit={handleSubmit} className="announcement-form">
+              <div className="form-group">
+                <label>Title</label>
+                <input type="text" name="title" value={formData.title} onChange={handleInputChange} required />
+              </div>
+              <div className="form-group">
+                <label>Mentor</label>
+                <input type="text" name="mentor" value={formData.mentor} onChange={handleInputChange} required />
+              </div>
+              <div className="form-group">
+                <label>Batch</label>
+                <select name="batchCode" value={formData.batchCode} onChange={handleInputChange} required>
+                  <option value="">Select a batch</option>
+                  {batches.map(batch => (
+                    <option key={batch._id} value={batch.batchCode}>{batch.batchName}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group full-width">
+                <label>Message</label>
+                <textarea name="message" value={formData.message} onChange={handleInputChange} required rows={4}></textarea>
+              </div>
+              <div className="form-actions">
+                <button type="button" onClick={() => setShowForm(false)} className="cancel-btn">Cancel</button>
+                <button type="submit" className="submit-btn" disabled={isSaving}>
+                  {isSaving ? 'Saving...' : (editingAnnouncementId ? 'Update Announcement' : 'Create Announcement')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <main className="announcements-grid">
+        {announcements.length > 0 ? announcements.map(announcement => (
+          <div key={announcement._id} className="announcement-card">
+            <div className="card-header">
+              <h2 className="card-title">{announcement.title}</h2>
+              <div className="card-actions">
+                <button onClick={() => handleEdit(announcement)} className="action-btn" title="Edit"><IconEdit /></button>
+                <button onClick={() => handleDelete(announcement._id)} className="action-btn delete" title="Delete"><IconDelete /></button>
+              </div>
+            </div>
+            <p className="card-message">{announcement.message}</p>
+            <div className="card-footer">
+              <span className="mentor-info">by {announcement.mentor}</span>
+              <span className="batch-tag">{announcement.batchName}</span>
+            </div>
+          </div>
+        )) : (
+          <div className="empty-state">
+            <h3>No Announcements Found</h3>
+            <p>Click "New Announcement" to create one.</p>
           </div>
         )}
-
-        {showForm && (
-          <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-sm mb-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Title
-              </label>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md focus:ring-primary focus:border-primary"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Mentor
-              </label>
-              <input
-                type="text"
-                name="mentor"
-                value={formData.mentor}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md focus:ring-primary focus:border-primary"
-                required
-              />
-            </div>
-            <div>
-              <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-1">
-                Message
-              </label>
-              <textarea
-                id="message"
-                name="message"
-                value={formData.message}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md focus:ring-primary focus:border-primary"
-                rows="4"
-                required
-              ></textarea>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Batch Code
-              </label>
-              <input
-                type="text"
-                name="batchCode"
-                value={formData.batchCode}
-                onChange={handleInputChange}
-                className="w-full p-2 border rounded-md focus:ring-primary focus:border-primary"
-                required
-                placeholder="e.g., BATCH-2025-A"
-              />
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-primary text-white py-2 px-4 rounded-md hover:bg-primary/90 transition-colors"
-              disabled={isSaving}
-            >
-              {isSaving ? 'Saving...' : (editingAnnouncementId ? 'Update Announcement' : 'Create Announcement')}
-            </button>
-          </form>
-        )}
-
-        <div className="grid gap-6">
-          {announcements.length === 0 ? (
-            <div className="text-center text-gray-500 py-12 bg-white rounded-lg shadow-sm">
-              No announcements found. Add your first announcement!
-            </div>
-          ) : (
-            announcements.map((announcement) => (
-              <div
-                key={announcement._id}
-                className="bg-white p-6 rounded-lg shadow-sm flex flex-col"
-              >
-                <div className="flex justify-between items-start">
-                    <div>
-                        <h2 className="text-xl font-semibold">{announcement.title}</h2>
-                        <p className="text-gray-600 text-sm mt-1">by {announcement.mentor}</p>
-                        <p className="text-gray-600 text-sm">Batch: {announcement.batchCode}</p>
-                    </div>
-                    <div className="flex gap-3">
-                        <button
-                            onClick={() => handleEdit(announcement)}
-                            className="text-primary hover:underline text-sm"
-                        >
-                            Edit
-                        </button>
-                        <button
-                            onClick={() => handleDelete(announcement._id)}
-                            className="text-red-600 hover:underline text-sm"
-                        >
-                            Delete
-                        </button>
-                    </div>
-                </div>
-                <p className="mt-4 text-gray-800">{announcement.message}</p>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
+      </main>
     </div>
   );
 }

@@ -1,119 +1,124 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from 'next/link';
+import { Users, UserCheck, UserPlus, BookOpen, ClipboardCheck, FileText, Video } from 'lucide-react';
+import './styles/AdminDashboard.css'; // Make sure this CSS file exists
 
-export default function Dashboard() {
-  // Renamed state variables for clarity and to avoid confusion with student data
-  const [adminOverviewStats, setAdminOverviewStats] = useState(null); 
+export default function AdminDashboardPage() {
+  const [admin, setAdmin] = useState(null);
+  const [overviewStats, setOverviewStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
-  const getAdminOverviewStats = async () => { // Renamed function
-    setLoading(true);
-    setError("");
-    try {
-      // NEW: Call the correct admin-specific API for dashboard overview
-      // Assuming you have a route like /api/admin/dashboard-overview or similar
-      // If not, you might need to create one to fetch overall stats (users, batches, etc.)
-      // For now, I'll use /api/admin/dashboard-overview as it exists in your provided files.
-      let res = await fetch("/api/admin/dashboard-overview"); 
-      let data = await res.json();
-
-      if (res.ok) {
-        setAdminOverviewStats(data.stats); // Assuming data.stats contains the overview object
-      } else {
-        setError(data.error || "Failed to fetch admin overview data.");
-      }
-    } catch (err) {
-      console.error("Error fetching admin overview:", err);
-      setError("An error occurred while loading admin dashboard data.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [date, setDate] = useState('');
 
   useEffect(() => {
-    getAdminOverviewStats(); // Call the new function
+    setDate(new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
+
+    const fetchData = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const [userRes, statsRes] = await Promise.all([
+          fetch("/api/auth/user"),
+          fetch("/api/admin/dashboard-overview")
+        ]);
+
+        const userData = await userRes.json();
+        if (userRes.ok && userData.user) setAdmin(userData.user);
+        else throw new Error(userData.error || "Failed to fetch admin details.");
+
+        const statsData = await statsRes.json();
+        if (statsRes.ok) {
+            setOverviewStats(statsData.stats);
+        } else {
+            throw new Error(statsData.error || "Failed to fetch dashboard stats.");
+        }
+
+      } catch (err) {
+        setError("An error occurred while loading the dashboard.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-zinc-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      <div className="loading-container">
+        <div className="loader"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-zinc-50">
-        <div className="text-red-600 mb-4 text-center px-4">{error}</div>
-        <button
-          onClick={getAdminOverviewStats} // Call the new function
-          className="text-primary hover:underline mt-4"
-        >
+      <div className="error-container">
+        <p>{error}</p>
+        <button onClick={() => window.location.reload()} className="retry-button">
           Try Again
         </button>
       </div>
     );
   }
 
-  // Display admin overview statistics
   return (
-    <div className="bg-zinc-50 min-h-screen py-10 px-4 lg:px-10 mb-12">
-      <div className="text-2xl text-center mt-4">Admin Dashboard Overview</div>
-      {adminOverviewStats ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-700">Total Users</h3>
-            <p className="text-3xl font-bold text-primary mt-2">{adminOverviewStats.totalUsers}</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-700">Total Students</h3>
-            <p className="text-3xl font-bold text-primary mt-2">{adminOverviewStats.totalStudents}</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-700">Pending Students</h3>
-            <p className="text-3xl font-bold text-yellow-600 mt-2">{adminOverviewStats.pendingStudents}</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-700">Approved Students</h3>
-            <p className="text-3xl font-bold text-green-600 mt-2">{adminOverviewStats.approvedStudents}</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-700">Total Batches</h3>
-            <p className="text-3xl font-bold text-primary mt-2">{adminOverviewStats.totalBatches}</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-700">Total Tests</h3>
-            <p className="text-3xl font-bold text-primary mt-2">{adminOverviewStats.totalTests}</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-700">Total Assignments</h3>
-            <p className="text-3xl font-bold text-primary mt-2">{adminOverviewStats.totalAssignments}</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-700">Total Study Materials</h3>
-            <p className="text-3xl font-bold text-primary mt-2">{adminOverviewStats.totalStudyMaterials}</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-700">Total Announcements</h3>
-            <p className="text-3xl font-bold text-primary mt-2">{adminOverviewStats.totalAnnouncements}</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-700">Total Submissions</h3>
-            <p className="text-3xl font-bold text-primary mt-2">{adminOverviewStats.totalSubmissions}</p>
-          </div>
-          <div className="bg-white p-6 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-700">Total Test Results</h3>
-            <p className="text-3xl font-bold text-primary mt-2">{adminOverviewStats.totalTestResults}</p>
-          </div>
+    <div className="admin-dashboard-container">
+      <header className="dashboard-header">
+        <div>
+          <h1 className="welcome-message">Welcome back, {admin?.name}!</h1>
+          <p className="header-subtitle">Here's an overview of the platform.</p>
         </div>
-      ) : (
-        <div className="text-center text-gray-500 mt-8">
-          No overview data available.
-        </div>
-      )}
+        <div className="date-display">{date}</div>
+      </header>
+
+      <section className="overview-stats">
+         <Link href="/admin/users" className="overview-card overview-color-1">
+            <div className="overview-icon"><Users size={24} /></div>
+            <p className="overview-value">{overviewStats?.totalMentors ?? 0}</p>
+            <p className="overview-label">Total Mentors</p>
+        </Link>
+        <Link href="/admin/users" className="overview-card overview-color-2">
+            <div className="overview-icon"><UserCheck size={24} /></div>
+            <p className="overview-value">{overviewStats?.approvedStudents ?? 0}</p>
+            <p className="overview-label">Approved Students</p>
+        </Link>
+        <Link href="/admin/users" className="overview-card overview-color-3">
+            <div className="overview-icon"><UserPlus size={24} /></div>
+            <p className="overview-value">{overviewStats?.totalPendingUsers ?? 0}</p>
+            <p className="overview-label">Pending Approvals</p>
+        </Link>
+      </section>
+
+      <div className="dashboard-main-content">
+        <section className="content-stats">
+          <h2 className="section-title">Platform Content</h2>
+            <div className="stats-grid">
+                <Link href="/admin/batches" className="stat-card card-color-0">
+                  <div className="card-icon"><BookOpen size={28} /></div>
+                  <h3 className="batch-name">Total Batches</h3>
+                  <p className="student-count">{overviewStats?.totalBatches ?? 0}</p>
+                </Link>
+                <Link href="/admin/assignments" className="stat-card card-color-1">
+                  <div className="card-icon"><ClipboardCheck size={28} /></div>
+                  <h3 className="batch-name">Total Assignments</h3>
+                  <p className="student-count">{overviewStats?.totalAssignments ?? 0}</p>
+                </Link>
+                <Link href="/admin/tests" className="stat-card card-color-2">
+                  <div className="card-icon"><FileText size={28} /></div>
+                  <h3 className="batch-name">Total Tests</h3>
+                  <p className="student-count">{overviewStats?.totalTests ?? 0}</p>
+                </Link>
+                <Link href="/admin/live-classes" className="stat-card card-color-3">
+                  <div className="card-icon"><Video size={28} /></div>
+                  <h3 className="batch-name">Total Live Classes</h3>
+                  <p className="student-count">{overviewStats?.totalLiveClasses ?? 0}</p>
+                </Link>
+            </div>
+        </section>
+      </div>
     </div>
   );
 }

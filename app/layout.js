@@ -20,14 +20,17 @@ const inter = Inter({
 
 
 export default function RootLayout({ children }) {
-  const pathname= usePathname()
+  const pathname = usePathname();
+  
+  // This condition checks if the current path is NOT a dashboard, admin, or mentor page.
+  const showNavAndFooter = !pathname.startsWith("/dashboard") && !pathname.startsWith("/admin") && !pathname.startsWith("/mentor");
+
   return (
     <html lang="en">
       <body className={`antialiased`}>
-        {!pathname.startsWith("/dashboard") && !pathname.startsWith("/admin") && <Navbar/> }
-        {/* <Navbar/> */}
+        {showNavAndFooter && <Navbar/> }
         <div className="">{children}</div>
-        {!pathname.startsWith("/dashboard") && !pathname.startsWith("/admin") && <Footer/> }
+        {showNavAndFooter && <Footer/> }
       </body>
     </html>
   );

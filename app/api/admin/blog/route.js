@@ -4,11 +4,11 @@ import Blog from "@/schema/Blogs";
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import Users from "@/schema/Users";
-import fs from 'fs/promises'; // NEW: Import file system module for file operations
-import path from 'path';     // NEW: Import path module for path manipulation
+import fs from 'fs/promises';
+import path from 'path';
 
-// Verify admin authentication
-async function verifyAdmin(req) {
+// UPDATED: Utility function to verify admin or mentor
+async function verifyAdminOrMentor(req) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('token');
@@ -18,9 +18,10 @@ async function verifyAdmin(req) {
     }
 
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
-    const user = await Users.findById(decoded.userId).select('-password');
+    await ConnectToDB();
+    const user = await Users.findById(decoded.userId).select('role');
 
-    if (!user || !user.isAdmin) {
+    if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
       return { success: false, error: 'Unauthorized access' };
     }
 
@@ -33,8 +34,8 @@ async function verifyAdmin(req) {
 // Create a new blog post
 export async function POST(req) {
   try {
-    // Verify if user is admin
-    const authResult = await verifyAdmin(req);
+    // UPDATED: Use new verification function
+    const authResult = await verifyAdminOrMentor(req);
     if (!authResult.success) {
       return NextResponse.json(
         { error: authResult.error },
@@ -42,15 +43,13 @@ export async function POST(req) {
       );
     }
 
-    // NEW: Parse request body as FormData for file uploads
     const formData = await req.formData();
     const title = formData.get('title');
     const description = formData.get('description');
     const paragraphOne = formData.get('paragraphOne');
     const paragraphTwo = formData.get('paragraphTwo');
     const paragraphThree = formData.get('paragraphThree');
-    const coverImageFile = formData.get('coverImage'); // The actual file object
-    const existingCoverImage = formData.get('existingCoverImage'); // Not strictly needed for POST, but good to get all form fields
+    const coverImageFile = formData.get('coverImage');
 
     if (!title || !description || !paragraphOne || !paragraphTwo || !paragraphThree) {
       return NextResponse.json({ error: "All text fields are required" }, { status: 400 });
@@ -58,33 +57,29 @@ export async function POST(req) {
 
     let coverImageUrl = '';
 
-    // NEW: Handle file upload if a new file is provided
     if (coverImageFile && coverImageFile.name) {
-      const uploadDir = path.join(process.cwd(), 'public', 'blog_images'); // Define upload directory
-      await fs.mkdir(uploadDir, { recursive: true }); // Create directory if it doesn't exist
+      const uploadDir = path.join(process.cwd(), 'public', 'blog_images');
+      await fs.mkdir(uploadDir, { recursive: true });
 
       const uniqueFileName = `${Date.now()}-${coverImageFile.name.replace(/\s/g, '_')}`;
       const filePath = path.join(uploadDir, uniqueFileName);
       const fileBuffer = Buffer.from(await coverImageFile.arrayBuffer());
 
-      await fs.writeFile(filePath, fileBuffer); // Save the file
-      coverImageUrl = `/blog_images/${uniqueFileName}`; // Store the public path
+      await fs.writeFile(filePath, fileBuffer);
+      coverImageUrl = `/blog_images/${uniqueFileName}`;
     } else {
-      // If no file is uploaded, and it's a new post, then cover image is missing
       return NextResponse.json({ error: "Cover image file is required for new blog posts" }, { status: 400 });
     }
 
-    // Connect to database
     await ConnectToDB();
 
-    // Create new blog post with the image URL
     const blog = await Blog.create({
       title,
       description,
       paragraphOne,
       paragraphTwo,
       paragraphThree,
-      coverImage: coverImageUrl // Use the new URL
+      coverImage: coverImageUrl
     });
 
     return NextResponse.json(
@@ -93,13 +88,6 @@ export async function POST(req) {
     );
   } catch (error) {
     console.error("Error creating blog:", error);
-    // NEW: More specific error handling for file system issues
-    if (error.code === 'ENOENT') {
-        return NextResponse.json(
-            { error: "Server error: Upload directory for images not found or accessible." },
-            { status: 500 }
-        );
-    }
     return NextResponse.json(
       { error: error.message || "Failed to create blog" },
       { status: 500 }
@@ -110,13 +98,11 @@ export async function POST(req) {
 // Get all blog posts
 export async function GET(req) {
   try {
-    // Connect to database
     await ConnectToDB();
 
-    // Get all blogs, sorted by creation date
     const blogs = await Blog.find({})
       .sort({ createdAt: -1 })
-      .select('-__v'); // Exclude version key
+      .select('-__v');
 
     return NextResponse.json({ blogs }, { status: 200 });
   } catch (error) {

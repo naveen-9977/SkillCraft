@@ -1,13 +1,12 @@
-// app/api/admin/users/route.js
 import { NextResponse } from "next/server";
 import dbConnect from '@/lib/dbConnect';
-import User from '@/schema/Users'; // Corrected import path and model name
+import User from '@/schema/Users';
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
-// Helper function to verify admin
-async function verifyAdmin(request) {
+// UPDATED: Helper function to verify admin or mentor
+async function verifyAdminOrMentor(request) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('token');
@@ -19,15 +18,16 @@ async function verifyAdmin(request) {
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key-fallback');
     
     await dbConnect(); 
-    const user = await User.findById(decoded.userId).select('-password');
+    const user = await User.findById(decoded.userId).select('role');
 
-    if (!user || !user.isAdmin) {
+    // UPDATED: Check for 'admin' or 'mentor' role
+    if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
       return { success: false, error: 'Unauthorized access', status: 403 };
     }
 
     return { success: true, user };
   } catch (error) {
-    console.error("Error in verifyAdmin:", error);
+    console.error("Error in verifyAdminOrMentor:", error);
     if (error instanceof jwt.JsonWebTokenError) {
       return { success: false, error: 'Invalid token', status: 401 };
     }
@@ -35,10 +35,10 @@ async function verifyAdmin(request) {
   }
 }
 
-// GET method to fetch all users (for admin)
+// GET method to fetch all users (for admin/mentor)
 export async function GET(req) {
   try {
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdminOrMentor(req);
     if (!authResult.success) {
       return NextResponse.json(
         { error: authResult.error },
@@ -48,24 +48,8 @@ export async function GET(req) {
 
     await dbConnect(); 
 
-    const { searchParams } = new URL(req.url);
-    const statusFilter = searchParams.get('status');
-    const batchCodeFilter = searchParams.get('batchCode'); // This filter might become less relevant with multiple batch codes
-
-    let query = {};
-    query.isAdmin = false; 
-
-    if (statusFilter) {
-      query.status = statusFilter;
-    }
-    // If you want to search users who are in a specific batch, you'd use $in
-    // if (batchCodeFilter) {
-    //   query.batchCodes = batchCodeFilter; // This would match if batchCodeFilter is an exact array
-    //   query.batchCodes = { $in: [batchCodeFilter] }; // To check if user is in *any* of the batches
-    // }
-
-    // Fetch users, exclude password, and sort by creation date descending
-    const users = await User.find(query).select('-password').sort({ createdAt: -1 });
+    // UPDATED: Query to exclude admins
+    const users = await User.find({ role: { $ne: 'admin' } }).select('-password').sort({ createdAt: -1 });
 
     return NextResponse.json({ users }, { status: 200 });
   } catch (error) {
@@ -77,10 +61,10 @@ export async function GET(req) {
   }
 }
 
-// PUT method to update user status and assign batchCodes (for admin)
+// PUT method to update user status and assign batchCodes (for admin/mentor)
 export async function PUT(req) {
   try {
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdminOrMentor(req);
     if (!authResult.success) {
       return NextResponse.json(
         { error: authResult.error },
@@ -88,7 +72,7 @@ export async function PUT(req) {
       );
     }
 
-    const { userId, status, batchCodes } = await req.json(); // NEW: Expect batchCodes array
+    const { userId, status, batchCodes } = await req.json();
 
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return NextResponse.json({ error: "Invalid User ID" }, { status: 400 });
@@ -106,18 +90,14 @@ export async function PUT(req) {
       updateData.status = status;
     }
 
-    // NEW: Logic for batchCodes array
     if (status === 'approved') {
       if (!Array.isArray(batchCodes) || batchCodes.length === 0) {
         return NextResponse.json({ error: "At least one Batch Code is required for approved users" }, { status: 400 });
       }
-      updateData.batchCodes = batchCodes; // Save the array
+      updateData.batchCodes = batchCodes;
     } else if (status && status !== 'approved') {
-      // If status is explicitly changed to pending/rejected, clear batchCodes
-      updateData.batchCodes = []; // Set to empty array
+      updateData.batchCodes = [];
     } else if (batchCodes !== undefined) {
-      // If only batchCodes is provided (status not changed), allow setting/clearing it
-      // Ensure it's an array, even if empty
       updateData.batchCodes = Array.isArray(batchCodes) ? batchCodes : [];
     }
 
@@ -144,10 +124,10 @@ export async function PUT(req) {
   }
 }
 
-// DELETE method to delete a user (for admin)
+// DELETE method to delete a user (for admin/mentor)
 export async function DELETE(req) {
   try {
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdminOrMentor(req);
     if (!authResult.success) {
       return NextResponse.json(
         { error: authResult.error },

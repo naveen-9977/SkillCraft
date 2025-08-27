@@ -1,4 +1,3 @@
-// app/api/notifications/mark-as-read/route.js
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
@@ -17,13 +16,15 @@ export async function PUT(req) {
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
     await ConnectToDB();
 
+    // Mark all unread notifications for this user as read
     await Notification.updateMany(
       { user: decoded.userId, isRead: false },
       { $set: { isRead: true } }
     );
 
-    return NextResponse.json({ message: "Notifications marked as read" });
+    return NextResponse.json({ message: "Notifications marked as read" }, { status: 200 });
   } catch (error) {
+    console.error("Error marking notifications as read:", error);
     return NextResponse.json(
       { error: "Failed to mark notifications as read" },
       { status: 500 }

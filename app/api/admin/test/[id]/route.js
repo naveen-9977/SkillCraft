@@ -4,10 +4,10 @@ import Test from "@/schema/Tests";
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
 import Users from "@/schema/Users";
-import mongoose from "mongoose"; // NEW: Import mongoose for ObjectId validation
+import mongoose from "mongoose";
 
-// Verify admin authentication
-async function verifyAdmin(req) {
+// UPDATED: This function now returns the user's role and ID for permission checks
+async function verifyAdminOrMentor(req) {
   try {
     const cookieStore = cookies();
     const token = cookieStore.get('token');
@@ -17,13 +17,14 @@ async function verifyAdmin(req) {
     }
 
     const decoded = jwt.verify(token.value, process.env.JWT_SECRET || 'your-secret-key');
-    const user = await Users.findById(decoded.userId).select('-password');
+    await ConnectToDB();
+    const user = await Users.findById(decoded.userId).select('role');
 
-    if (!user || !user.isAdmin) {
+    if (!user || (user.role !== 'admin' && user.role !== 'mentor')) {
       return { success: false, error: 'Unauthorized access' };
     }
 
-    return { success: true, user };
+    return { success: true, role: user.role, userId: decoded.userId };
   } catch (error) {
     return { success: false, error: 'Invalid token' };
   }
@@ -32,7 +33,11 @@ async function verifyAdmin(req) {
 // Get a specific test
 export async function GET(req, { params }) {
   try {
-    // NEW: Validate params.id
+    const authResult = await verifyAdminOrMentor(req);
+    if (!authResult.success) {
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
+    }
+
     if (!params || !params.id || !mongoose.Types.ObjectId.isValid(params.id)) {
       return NextResponse.json(
         { error: "Invalid or missing Test ID provided" },
@@ -50,6 +55,11 @@ export async function GET(req, { params }) {
         { status: 404 }
       );
     }
+    
+    // Ownership check for mentors
+    if (authResult.role === 'mentor' && test.createdBy.toString() !== authResult.userId) {
+        return NextResponse.json({ error: "You do not have permission to view this test's details." }, { status: 403 });
+    }
 
     return NextResponse.json({ test }, { status: 200 });
   } catch (error) {
@@ -64,51 +74,40 @@ export async function GET(req, { params }) {
 // Update a test
 export async function PUT(req, { params }) {
   try {
-    // Verify if user is admin
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdminOrMentor(req);
     if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
 
-    // NEW: Validate params.id
     if (!params || !params.id || !mongoose.Types.ObjectId.isValid(params.id)) {
-      return NextResponse.json(
-        { error: "Invalid or missing Test ID provided" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid or missing Test ID provided" }, { status: 400 });
+    }
+
+    await ConnectToDB();
+    
+    const testToUpdate = await Test.findById(params.id);
+    if (!testToUpdate) {
+        return NextResponse.json({ error: "Test not found" }, { status: 404 });
+    }
+
+    // Ownership check for mentors
+    if (authResult.role === 'mentor' && testToUpdate.createdBy.toString() !== authResult.userId) {
+        return NextResponse.json({ error: "You do not have permission to edit this test." }, { status: 403 });
     }
 
     const testData = await req.json();
-
-    // NEW: Validate batchCode if it's being updated
-    if (testData.batchCode === undefined || testData.batchCode === null || testData.batchCode === '') {
+    if (!testData.batchCode) {
       return NextResponse.json({ error: "Batch code is required for tests" }, { status: 400 });
     }
 
-
-    await ConnectToDB();
-
-    const test = await Test.findByIdAndUpdate(
+    const updatedTest = await Test.findByIdAndUpdate(
       params.id,
-      {
-        ...testData,
-        updatedAt: new Date()
-      },
+      { ...testData, updatedAt: new Date() },
       { new: true, runValidators: true }
     );
 
-    if (!test) {
-      return NextResponse.json(
-        { error: "Test not found" },
-        { status: 404 }
-      );
-    }
-
     return NextResponse.json(
-      { message: "Test updated successfully", test },
+      { message: "Test updated successfully", test: updatedTest },
       { status: 200 }
     );
   } catch (error) {
@@ -123,33 +122,28 @@ export async function PUT(req, { params }) {
 // Delete a test
 export async function DELETE(req, { params }) {
   try {
-    // Verify if user is admin
-    const authResult = await verifyAdmin(req);
+    const authResult = await verifyAdminOrMentor(req);
     if (!authResult.success) {
-      return NextResponse.json(
-        { error: authResult.error },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: authResult.error }, { status: 401 });
     }
 
-    // NEW: Validate params.id
     if (!params || !params.id || !mongoose.Types.ObjectId.isValid(params.id)) {
-      return NextResponse.json(
-        { error: "Invalid or missing Test ID provided" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid or missing Test ID provided" }, { status: 400 });
     }
 
     await ConnectToDB();
 
-    const test = await Test.findByIdAndDelete(params.id);
-
-    if (!test) {
-      return NextResponse.json(
-        { error: "Test not found" },
-        { status: 404 }
-      );
+    const testToDelete = await Test.findById(params.id);
+    if (!testToDelete) {
+        return NextResponse.json({ error: "Test not found" }, { status: 404 });
     }
+
+    // Ownership check for mentors
+    if (authResult.role === 'mentor' && testToDelete.createdBy.toString() !== authResult.userId) {
+        return NextResponse.json({ error: "You do not have permission to delete this test." }, { status: 403 });
+    }
+
+    await Test.findByIdAndDelete(params.id);
 
     return NextResponse.json(
       { message: "Test deleted successfully" },

@@ -1,16 +1,15 @@
-// app/api/test-results/route.js
 import { NextResponse } from "next/server";
-import ConnectToDB from "@/DB/ConnectToDB"; // Assuming your DB connection utility
-import TestResult from "@/schema/TestResult"; // Your new schema
-import Test from "@/schema/Tests"; // Your existing Test schema
-import Users from "@/schema/Users"; // NEW: Import Users schema
+import ConnectToDB from "@/DB/ConnectToDB";
+import TestResult from "@/schema/TestResult";
+import Test from "@/schema/Tests";
+import Users from "@/schema/Users";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
-import Notification from "@/schema/Notification"; // NEW: Import Notification schema
+import Notification from "@/schema/Notification";
 
+// POST a new test result (This part remains the same)
 export async function POST(req) {
   try {
-    // Authenticate user (assuming JWT token in cookies)
     const cookieStore = cookies();
     const token = cookieStore.get("token");
 
@@ -33,13 +32,11 @@ export async function POST(req) {
 
     await ConnectToDB();
 
-    // Fetch the actual test to verify answers and calculate score
     const test = await Test.findById(testId);
     if (!test) {
       return NextResponse.json({ error: "Test not found" }, { status: 404 });
     }
 
-    // NEW: Fetch student details for notification
     const student = await Users.findById(decoded.userId).select('name email');
     if (!student) {
         return NextResponse.json({ error: "Student not found" }, { status: 404 });
@@ -67,15 +64,14 @@ export async function POST(req) {
       answers: formattedAnswers,
     });
 
-    // NEW: Create a notification for admins about the new test result
     if (newTestResult) {
-        const admins = await Users.find({ isAdmin: true });
-        for (const admin of admins) {
+        const adminsAndMentors = await Users.find({ role: { $in: ['admin', 'mentor'] } });
+        for (const adminOrMentor of adminsAndMentors) {
             await Notification.create({
-                user: admin._id,
-                message: `New test result from ${student.name} for "${test.title}" (Batch: ${test.batchCode}). Score: ${score}/${test.questions.length}.`,
-                link: `/admin/leaderboard?testId=${test._id}`, // Link to the specific test leaderboard
-                batchCode: test.batchCode, // Include batchCode
+                user: adminOrMentor._id,
+                message: `New test result from ${student.name} for "${test.title}". Score: ${score}/${test.questions.length}.`,
+                link: `/admin/leaderboard?testId=${test._id}`,
+                batchCode: test.batchCode,
                 type: "new_test_result",
             });
         }
@@ -94,7 +90,7 @@ export async function POST(req) {
   }
 }
 
-// You might also want a GET route to fetch a student's past test results
+// CORRECTED: GET all test results for the logged-in student
 export async function GET(req) {
     try {
         const cookieStore = cookies();
@@ -114,8 +110,9 @@ export async function GET(req) {
         await ConnectToDB();
         const studentId = decoded.userId;
 
+        // This query correctly fetches all results for the student and does not use `params`.
         const testResults = await TestResult.find({ student: studentId })
-            .populate('test', 'title description') // Populate test details
+            .populate('test', 'title description')
             .sort({ submittedAt: -1 });
 
         return NextResponse.json({ testResults }, { status: 200 });
