@@ -25,7 +25,7 @@ const liveClassSchema = new mongoose.Schema({
   },
   classType: {
     type: String,
-    enum: ['webrtc', 'external'],
+    enum: ['external', 'webrtc'],
     default: 'external',
     required: true,
   },

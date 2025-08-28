@@ -9,6 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@100mslive/react-sdk": "^0.10.38",
+    "@100mslive/roomkit-react": "^0.3.38",
+    "@100mslive/server-sdk": "^0.3.0",
     "axios": "^1.11.0",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^3.0.2",

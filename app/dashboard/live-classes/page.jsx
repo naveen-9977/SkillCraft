@@ -93,7 +93,7 @@ const LiveClassesPage = () => {
                         <p>Join sessions and engage with your mentors</p>
                     </div>
                 </div>
-                
+
                 <div className="stats-cards">
                     <div className="stat-card">
                         <div className="stat-value">{liveClasses.length}</div>
@@ -152,11 +152,11 @@ const LiveClassesPage = () => {
                                                 <span>{simpleText}</span>
                                             </div>
                                         </div>
-                                        
+
                                         <div className="card-body">
                                             <h3 className="class-topic">{cls.topic}</h3>
                                             <p className="class-description">{cls.description}</p>
-                                            
+
                                             <div className="class-meta">
                                                 <div className="meta-item">
                                                     <span className="meta-label">Mentor</span>
@@ -167,7 +167,7 @@ const LiveClassesPage = () => {
                                                     <span className="meta-value">{cls.batch?.batchName || 'N/A'}</span>
                                                 </div>
                                             </div>
-                                            
+
                                             <div className="time-info">
                                                 <div className="date-badge">
                                                     <span className="date">{formattedDate}</span>
@@ -175,17 +175,17 @@ const LiveClassesPage = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        
+
                                         <div className="card-footer">
-                                            {status === 'live' ? (
-                                                cls.classType === 'external' ? (
-                                                    <a href={cls.link} target="_blank" rel="noopener noreferrer" className="join-btn">
-                                                        Join via Link
-                                                    </a>
-                                                ) : (
+                                            {isJoinable ? (
+                                                cls.classType === 'webrtc' ? (
                                                     <Link href={`/dashboard/live-classes/${cls._id}`} className="join-btn">
                                                         Join Class
                                                     </Link>
+                                                ) : (
+                                                    <a href={cls.link} target="_blank" rel="noopener noreferrer" className="join-btn">
+                                                        Join Class
+                                                    </a>
                                                 )
                                             ) : (
                                                 <button className="join-btn btn-disabled" disabled>

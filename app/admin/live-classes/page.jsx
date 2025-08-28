@@ -46,11 +46,11 @@ const AdminLiveClasses = () => {
 
             setClasses(classesRes?.data?.data || []);
             setAllBatches(batchesRes?.data?.batches || []);
-            
+
             const allUsers = usersRes?.data?.users || [];
             const approvedMentors = allUsers.filter(user => user.role === 'mentor' && user.status === 'approved');
             setAllMentors(approvedMentors);
-            
+
             if (currentUser?.role === 'mentor') {
                 setFormData(prevState => ({ ...prevState, mentor: currentUser._id }));
             }
@@ -66,7 +66,7 @@ const AdminLiveClasses = () => {
         const { name, value } = e.target;
         setFormData(prevState => ({ ...prevState, [name]: value }));
     };
-    
+
     const handleBatchSelection = (batchId) => {
         setFormData(prevState => {
             const newBatch = prevState.batch.includes(batchId)
@@ -119,7 +119,7 @@ const AdminLiveClasses = () => {
         e.preventDefault();
         setError('');
         const url = '/api/admin/live-classes';
-        
+
         try {
             const response = editingClassId 
                 ? await axios.put(url, { ...formData, _id: editingClassId })
@@ -147,7 +147,7 @@ const AdminLiveClasses = () => {
         const matchesSearch = cls.topic.toLowerCase().includes(searchQuery.toLowerCase());
         return (activeTab === 'all' || status === activeTab) && matchesSearch;
     });
-    
+
     const availableBatchesForForm = () => {
         if (user?.role === 'admin') {
             const selectedMentor = allMentors.find(m => m._id === formData.mentor);
@@ -219,7 +219,7 @@ const AdminLiveClasses = () => {
                                         cls.classType === 'webrtc' ? (
                                             <Link href={`/admin/live-classes/${cls._id}`} target="_blank" className="join-btn">Join Class</Link>
                                         ) : (
-                                            <a href={cls.link} target="_blank" rel="noopener noreferrer" className="join-btn">Join Link</a>
+                                            <a href={cls.link} target="_blank" rel="noopener noreferrer" className="join-btn">Join Class</a>
                                         )
                                     )}
                                 </div>
@@ -244,7 +244,7 @@ const AdminLiveClasses = () => {
                         </div>
                         <form onSubmit={handleSubmit} className="modal-body">
                             {error && <div className="modal-error">{error}</div>}
-                            
+
                             <div className="form-grid">
                                 <div className="form-group span-2">
                                     <label htmlFor="topic">Topic</label>
@@ -286,7 +286,7 @@ const AdminLiveClasses = () => {
                                     <label>Class Type</label>
                                     <div className="status-options">
                                         <div onClick={() => setFormData({...formData, classType: 'external'})} className={`status-option ${formData.classType === 'external' ? 'active' : ''}`}>External Link</div>
-                                        <div onClick={() => setFormData({...formData, classType: 'webrtc'})} className={`status-option ${formData.classType === 'webrtc' ? 'active' : ''}`}>Self-Hosted</div>
+                                        <div onClick={() => setFormData({...formData, classType: 'webrtc'})} className={`status-option ${formData.classType === 'webrtc' ? 'active' : ''}`}>100ms (self-hosted)</div>
                                     </div>
                                 </div>
                                 {formData.classType === 'external' && (
@@ -296,7 +296,7 @@ const AdminLiveClasses = () => {
                                     </div>
                                 )}
                             </div>
-                            
+
                             <div className="modal-footer">
                                 <button type="button" onClick={resetForm} className="cancel-btn"><FiX /> Cancel</button>
                                 <button type="submit" className="save-btn"><FiSave /> {editingClassId ? 'Update' : 'Create'}</button>
